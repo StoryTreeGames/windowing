@@ -1,9 +1,58 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const http = std.http;
+
+fn fetch_file(url: []const u8, dest: []const u8) !void {
+    const file = std.fs.cwd().createFile(dest, .{ .exclusive = true }) catch |err| switch (err) {
+        error.PathAlreadyExists => return,
+        else => return err,
+    };
+    defer file.close();
+
+    var gpa_impl = std.heap.GeneralPurposeAllocator(.{}){};
+    const gpa = gpa_impl.allocator();
+
+    var client = http.Client{ .allocator = gpa };
+    defer client.deinit();
+
+    const uri = try std.Uri.parse(url);
+
+    var server_header_buffer: [1024 * 1024]u8 = undefined;
+    const options = .{ .server_header_buffer = &server_header_buffer };
+    var req = try client.open(http.Method.GET, uri, options);
+    defer req.deinit();
+
+    try req.send(.{});
+    try req.wait();
+
+    // var result = std.ArrayList(u8).init(gpa);
+    var buffer = [_]u8{0} ** 1024;
+    while (true) {
+        const index = req.readAll(&buffer) catch |err| switch (err) {
+            http.Client.Connection.ReadError.EndOfStream => break,
+            else => return err,
+        };
+        if (index == 0) {
+            break;
+        }
+
+        try file.writeAll(buffer[0..index]);
+        // try result.appendSlice(buffer[0..index]);
+    }
+
+    // const body = try result.toOwnedSlice();
+    std.debug.print("{s}\n", .{dest});
+    // std.debug.print("{s}\n", .{body});
+}
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
 pub fn build(b: *std.Build) void {
+    // This is needed for building the vulkan-zig dependency
+
+    fetch_file("https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/main/xml/vk.xml", "vk.xml") catch unreachable;
+
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -35,6 +84,27 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    switch (builtin.target.os.tag) {
+        // Windows OS dependencies
+        .windows => {
+            exe.root_module.addImport(
+                "win32",
+                // zigwin32 doesn't work well with target and optimize variables passed in
+                // this could change if the library updates after zig 0.12
+                b.dependency("zigwin32", .{}).module("zigwin32"),
+            );
+        },
+        else => {},
+    }
+
+    // Add vulkan-zig dependency
+    exe.root_module.addImport(
+        "vulkan",
+        b.dependency("vulkan_zig", .{
+            .registry = @as([]const u8, b.pathFromRoot("vk.xml")),
+        }).module("vulkan-zig"),
+    );
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
