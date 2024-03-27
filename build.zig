@@ -1,18 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const http = std.http;
+const json = std.json;
 
-fn fetch_file(url: []const u8, dest: []const u8) !void {
-    const file = std.fs.cwd().createFile(dest, .{ .exclusive = true }) catch |err| switch (err) {
-        error.PathAlreadyExists => return,
-        else => return err,
-    };
-    defer file.close();
-
-    var gpa_impl = std.heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_impl.allocator();
-
-    var client = http.Client{ .allocator = gpa };
+// {User}/{Repo}: Snektron/vulkan-zig
+// https://raw.githubusercontent.com/
+// https://api.github.com/repos/{User}/{Repo}/commits?per_page=1
+fn fetch(allocator: std.mem.Allocator, url: []const u8) ![]u8 {
+    var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
     const uri = try std.Uri.parse(url);
@@ -25,7 +20,47 @@ fn fetch_file(url: []const u8, dest: []const u8) !void {
     try req.send(.{});
     try req.wait();
 
-    // var result = std.ArrayList(u8).init(gpa);
+    // Temp buffer to interatively fetch response body from
+    var buffer = [_]u8{0} ** 1024;
+    var result = std.ArrayList(u8).init(allocator);
+    while (true) {
+        const index = req.readAll(&buffer) catch |err| switch (err) {
+            http.Client.Connection.ReadError.EndOfStream => break,
+            else => return err,
+        };
+        if (index == 0) {
+            break;
+        }
+
+        try result.appendSlice(buffer[0..index]);
+    }
+
+    return result.toOwnedSlice();
+}
+
+fn fetch_file(url: []const u8, dest: []const u8) !void {
+    // Try creating the file and if it already exists don't download it again
+    const file = std.fs.cwd().createFile(dest, .{}) catch unreachable;
+    defer file.close();
+
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var client = http.Client{ .allocator = allocator };
+    defer client.deinit();
+
+    const uri = try std.Uri.parse(url);
+
+    var server_header_buffer: [1024 * 1024]u8 = undefined;
+    const options = .{ .server_header_buffer = &server_header_buffer };
+    var req = try client.open(http.Method.GET, uri, options);
+    defer req.deinit();
+
+    try req.send(.{});
+    try req.wait();
+
+    // Temp buffer to interatively fetch response body from
     var buffer = [_]u8{0} ** 1024;
     while (true) {
         const index = req.readAll(&buffer) catch |err| switch (err) {
@@ -37,12 +72,65 @@ fn fetch_file(url: []const u8, dest: []const u8) !void {
         }
 
         try file.writeAll(buffer[0..index]);
-        // try result.appendSlice(buffer[0..index]);
+    }
+}
+
+const GitFile = struct { repo: struct {
+    user: []const u8,
+    repo: []const u8,
+}, file: []const u8 };
+
+fn ensure_file(comptime git_file: GitFile) !void {
+    std.fs.cwd().makeDir(".cache") catch {};
+    var hash: []const u8 = undefined;
+    const cache_file = ".cache/" ++ git_file.file ++ ".hash";
+
+    const file = std.fs.cwd().openFile(cache_file, .{ .mode = .read_write }) catch |err| switch (err) {
+        error.FileNotFound => try std.fs.cwd().createFile(cache_file, .{ .read = true }),
+        else => return err,
+    };
+    defer file.close();
+
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var buffered = std.io.bufferedReader(file.reader());
+    const reader = buffered.reader();
+
+    var arr = std.ArrayList(u8).init(allocator);
+    defer arr.deinit();
+
+    reader.streamUntilDelimiter(arr.writer(), '\n', null) catch |err| switch (err) {
+        error.EndOfStream => {},
+        else => return err,
+    };
+
+    hash = try arr.toOwnedSlice();
+
+    // Fetch latest commit from git
+    const body = try fetch(
+        allocator,
+        "https://api.github.com/repos/" ++ git_file.repo.user ++ "/" ++ git_file.repo.repo ++ "/commits?per_page=1",
+    );
+    const response = try json.parseFromSliceLeaky(json.Value, allocator, body, .{});
+    const value = response.array.items[0].object;
+
+    if (value.get("sha")) |v| {
+        if (std.mem.eql(u8, v.string, hash)) {
+            return;
+        }
+        try file.writeAll(v.string);
+    } else {
+        std.log.warn("[build] Unable to get sha from `KhronosGroup/Vulkan-Docs`", .{});
     }
 
-    // const body = try result.toOwnedSlice();
-    std.debug.print("{s}\n", .{dest});
-    // std.debug.print("{s}\n", .{body});
+    std.log.info("[build] Missing or out of date vulkan `vk.xml`", .{});
+    std.log.info("[build] Updating file `vk.xml` to latest from `KhronosGroup/Vulkan-Docs`", .{});
+    fetch_file(
+        "https://raw.githubusercontent.com/" ++ git_file.repo.user ++ "/" ++ git_file.repo.repo ++ "/main/xml/" ++ git_file.file,
+        git_file.file,
+    ) catch unreachable;
 }
 
 // Although this function looks imperative, note that its job is to
@@ -50,8 +138,15 @@ fn fetch_file(url: []const u8, dest: []const u8) !void {
 // runner.
 pub fn build(b: *std.Build) void {
     // This is needed for building the vulkan-zig dependency
-
-    fetch_file("https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/main/xml/vk.xml", "vk.xml") catch unreachable;
+    // This will automatically check a cached commit hash for updates
+    //  if there is an update the vk.xml file will be updated
+    ensure_file(.{
+        .repo = .{
+            .user = "KhronosGroup",
+            .repo = "Vulkan-Docs",
+        },
+        .file = "vk.xml",
+    }) catch unreachable;
 
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which

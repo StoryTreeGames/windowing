@@ -6,3 +6,4 @@ zig-out/
 /build-*/
 /docgen_temp/
 vk.xml
+.cache/
