@@ -5,5 +5,6 @@ zig-out/
 /build/
 /build-*/
 /docgen_temp/
-vk.xml
+
+# My custom cache directory for caching single git files with their hashes
 .cache/

@@ -129,7 +129,7 @@ fn ensure_file(comptime git_file: GitFile) !void {
     std.log.info("[build] Updating file `vk.xml` to latest from `KhronosGroup/Vulkan-Docs`", .{});
     fetch_file(
         "https://raw.githubusercontent.com/" ++ git_file.repo.user ++ "/" ++ git_file.repo.repo ++ "/main/xml/" ++ git_file.file,
-        git_file.file,
+        ".cache/" ++ git_file.file,
     ) catch unreachable;
 }
 
@@ -197,7 +197,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport(
         "vulkan",
         b.dependency("vulkan_zig", .{
-            .registry = @as([]const u8, b.pathFromRoot("vk.xml")),
+            .registry = @as([]const u8, b.pathFromRoot(".cache/vk.xml")),
         }).module("vulkan-zig"),
     );
 
