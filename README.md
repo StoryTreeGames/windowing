@@ -12,4 +12,4 @@ I hope to keep all my projects as open source and community based as possible. A
 > 🗒️ Note: Peek [StoryTree](https://github.com/StoryTreeGames) as the larger scoped project inspiring this one. I am currently bouncing between Zig and Rust. Rust would be easier to use with a more mature ecosystem; however, Zig is maturing a lot and is in need of some good packages for the
 > new package manager with version `0.12`. If Zig ends up being the language I use for `StoryTree` this repo will be moved to the `StoryTree` orginization.
 
-> ⚠️ Warn: This repo is more exploritory and the API is subject to change with every merge into the main branch. To help with the volitile nature this project will be split into a develop and a main branch.
+> ⚠️ Warn: This repo is more exploritory and the API is subject to change with every merge into the main branch. To help with the volitile nature, this project will be split into a develop and a main branch.
