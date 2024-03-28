@@ -6,7 +6,10 @@ const json = std.json;
 // {User}/{Repo}: Snektron/vulkan-zig
 // https://raw.githubusercontent.com/
 // https://api.github.com/repos/{User}/{Repo}/commits?per_page=1
-fn fetch(allocator: std.mem.Allocator, url: []const u8) ![]u8 {
+
+/// Fetch latest commit from git repository. This is a raw json array containing a single commit
+/// commit object.
+fn fetch_latest_commit(allocator: std.mem.Allocator, url: []const u8) ![]u8 {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
 
@@ -64,7 +67,7 @@ fn fetch_file(url: []const u8, dest: []const u8) !void {
     var buffer = [_]u8{0} ** 1024;
     while (true) {
         const index = req.readAll(&buffer) catch |err| switch (err) {
-            http.Client.Connection.ReadError.EndOfStream => break,
+            error.EndOfStream => break,
             else => return err,
         };
         if (index == 0) {
@@ -109,7 +112,7 @@ fn ensure_file(comptime git_file: GitFile) !void {
     hash = try arr.toOwnedSlice();
 
     // Fetch latest commit from git
-    const body = try fetch(
+    const body = try fetch_latest_commit(
         allocator,
         "https://api.github.com/repos/" ++ git_file.repo.user ++ "/" ++ git_file.repo.repo ++ "/commits?per_page=1",
     );

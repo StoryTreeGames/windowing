@@ -16,7 +16,8 @@ const T = zig.L;
 
 pub const Message = enum { Close, Repaint, Input, NoOp };
 
-pub const Window = switch (builtin.target.os.tag) {
+// pub const Window =
+pub usingnamespace switch (builtin.target.os.tag) {
     .windows => struct {
         const Self = @This();
 
