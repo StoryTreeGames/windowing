@@ -19,6 +19,7 @@ const T = @import("win32").zig.L;
 const UUID = @import("root").uuid.UUID;
 
 const Event = @import("root").events.Event;
+const EventLoop = @import("root").events.EventLoop;
 
 const Self = @This();
 
@@ -30,12 +31,15 @@ classWide: [:0]const u16,
 
 handle: ?foundation.HWND,
 allocator: std.mem.Allocator,
+event_loop: *EventLoop,
 
 pub const Target = struct {
     hwnd: foundation.HWND,
+    event_loop: *EventLoop,
 
     pub fn exit(self: Target) void {
         _ = windows_and_messaging.DestroyWindow(self.hwnd);
+        self.event_loop.decrement();
     }
     pub fn show(self: Target, state: bool) void {
         showWindow(self.hwnd, state);
@@ -48,18 +52,49 @@ fn wndProc(
     wparam: foundation.WPARAM,
     lparam: foundation.LPARAM,
 ) callconv(WINAPI) foundation.LRESULT {
-    switch (uMsg) {
-        windows_and_messaging.WM_PAINT => {},
-        windows_and_messaging.WM_DESTROY => {
-            windows_and_messaging.PostQuitMessage(0);
-            _ = Event.close;
-            // _ = windows_and_messaging.DestroyWindow(hwnd);
-            // if (event_handler) |handler| {
-            //     event_handler(Event{.close}, Target{});
-            // }
-            // break :blk Message.Close;
-        },
-        else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
+    if (uMsg == windows_and_messaging.WM_CREATE) {
+        // Get CREATESTRUCTW pointer from lparam
+        const lpptr: usize = @intCast(lparam);
+        const create_struct: *windows_and_messaging.CREATESTRUCTW = @ptrFromInt(lpptr);
+
+        // If lpCreateParams exists then assign window data/state
+        if (create_struct.lpCreateParams) |create_params| {
+            // Cast from anyopaque to an expected EventLoop
+            // this includes casting the pointer alignment
+            const event_loop: *EventLoop = @ptrCast(@alignCast(create_params));
+            // Cast pointer to isize for setting data
+            const long_ptr: usize = @intFromPtr(event_loop);
+            const ptr: isize = @intCast(long_ptr);
+            _ = windows_and_messaging.SetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA, ptr);
+        }
+    } else {
+        // Get window state/data pointer
+        const ptr = windows_and_messaging.GetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA);
+        // Cast int to optional EventLoop pointer
+        const lptr: usize = @intCast(ptr);
+        const event_loop: ?*EventLoop = @ptrFromInt(lptr);
+
+        if (event_loop) |el| {
+            switch (uMsg) {
+                windows_and_messaging.WM_CLOSE => {
+                    std.log.warn("Closing... [{any}]", .{event_loop});
+                    const target = Target{ .hwnd = hwnd, .event_loop = el };
+                    if (el.handler) |handler| {
+                        handler(Event.close, target);
+                    } else {
+                        target.exit();
+                    }
+                },
+                else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
+            }
+        } else {
+            switch (uMsg) {
+                windows_and_messaging.WM_DESTROY => {
+                    windows_and_messaging.PostQuitMessage(0);
+                },
+                else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
+            }
+        }
     }
 
     return 0;
@@ -70,26 +105,23 @@ const WindowOptions = struct { title: []const u8 = "" };
 /// Create a new window with the given title
 pub fn init(
     allocator: std.mem.Allocator,
+    event_loop: *EventLoop,
     options: WindowOptions,
 ) Error!Self {
     const title: [:0]u8 = try allocator.allocSentinel(u8, options.title.len, 0);
     @memcpy(title, options.title);
     const titleWide: [:0]const u16 = try utf8ToUtf16(allocator, title);
 
+    event_loop.increment();
+
     const class = try createUIDClass(allocator);
     const classWide = try utf8ToUtf16(allocator, class[0..]);
     std.log.info("Create Window ['{s}'] {s}", .{ title, class });
 
-    var window = Self{
-        .title = title,
-        .titleWide = titleWide,
-        .class = class,
-        .classWide = classWide,
-        .handle = null,
-        .allocator = allocator,
-    };
+    var window = Self{ .title = title, .titleWide = titleWide, .class = class, .classWide = classWide, .handle = null, .allocator = allocator, .event_loop = event_loop };
 
     const instance = library_loader.GetModuleHandleW(null);
+
     const wnd_class = windows_and_messaging.WNDCLASSW{
         .lpszClassName = classWide.ptr,
 
@@ -123,7 +155,7 @@ pub fn init(
         null, // Parent
         null, // Menu
         instance,
-        null, // WM_CREATE lpParam
+        @ptrCast(event_loop), // WM_CREATE lpParam
     );
 
     if (handle == null) {
