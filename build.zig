@@ -160,10 +160,10 @@ pub fn build(b: *std.Build) void {
     // Standard optimization options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .Debug });
 
     const lib = b.addStaticLibrary(.{
-        .name = "native",
+        .name = "znwl",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = .{ .path = "src/root.zig" },
@@ -177,7 +177,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     const exe = b.addExecutable(.{
-        .name = "native",
+        .name = "znwl",
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
@@ -186,6 +186,8 @@ pub fn build(b: *std.Build) void {
     switch (builtin.target.os.tag) {
         // Windows OS dependencies
         .windows => {
+            // Build without console
+            // exe.subsystem = .Windows;
             exe.root_module.addImport(
                 "win32",
                 // zigwin32 doesn't work well with target and optimize variables passed in

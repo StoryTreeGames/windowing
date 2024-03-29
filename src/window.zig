@@ -1,3 +1,22 @@
+/// A platform specific window implementation.
+///
+/// This contains methods for creating and manipulating windows, but stops
+/// short of the full features that allow for full UI creation. The idea is that
+/// other libraries can be used with this one, like Vulkan, to render UI onto
+/// the window seperatly.
+///
+/// ## Features
+/// - size
+/// - title
+/// - placement
+/// - show/hide
+/// - icon
+/// - background
+/// - theme (dark/light)
+/// - minimize
+/// - maximize
+/// - fullscreen
+/// - menu
 const builtin = @import("builtin");
 
 pub usingnamespace switch (builtin.target.os.tag) {
