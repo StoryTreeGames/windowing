@@ -163,7 +163,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const lib = b.addStaticLibrary(.{
-        .name = "native",
+        .name = "znwl",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = .{ .path = "src/root.zig" },
@@ -177,7 +177,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     const exe = b.addExecutable(.{
-        .name = "native",
+        .name = "znwl",
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,

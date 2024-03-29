@@ -10,7 +10,7 @@ pub const Event = union(enum) {
     input: union(enum) { keyboard: struct {}, mouse: struct {} },
 };
 
-pub fn event_loop(comptime handler: ?*const fn (event: Event, target: Target) void) void {
+pub fn eventLoop(comptime handler: ?*const fn (event: Event, target: Target) void) void {
     switch (builtin.target.os.tag) {
         .windows => {
             var message: windows_and_messaging.MSG = undefined;

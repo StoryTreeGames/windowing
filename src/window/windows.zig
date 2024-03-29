@@ -38,11 +38,11 @@ pub const Target = struct {
         _ = windows_and_messaging.DestroyWindow(self.hwnd);
     }
     pub fn show(self: Target, state: bool) void {
-        show_window(self.hwnd, state);
+        showWindow(self.hwnd, state);
     }
 };
 
-fn wnd_proc(
+fn wndProc(
     hwnd: foundation.HWND,
     uMsg: u32,
     wparam: foundation.WPARAM,
@@ -74,10 +74,10 @@ pub fn init(
 ) Error!Self {
     const title: [:0]u8 = try allocator.allocSentinel(u8, options.title.len, 0);
     @memcpy(title, options.title);
-    const titleWide: [:0]const u16 = try rtUtf8ToUtf16(allocator, title);
+    const titleWide: [:0]const u16 = try utf8ToUtf16(allocator, title);
 
     const class = try createUIDClass(allocator);
-    const classWide = try rtUtf8ToUtf16(allocator, class[0..]);
+    const classWide = try utf8ToUtf16(allocator, class[0..]);
     std.log.info("Create Window ['{s}'] {s}", .{ title, class });
 
     var window = Self{
@@ -103,7 +103,7 @@ pub fn init(
         .lpszMenuName = null,
 
         .hInstance = instance,
-        .lpfnWndProc = wnd_proc,
+        .lpfnWndProc = wndProc,
     };
     const result = windows_and_messaging.RegisterClassW(&wnd_class);
 
@@ -140,10 +140,10 @@ pub fn init(
 }
 
 pub fn show(self: Self, state: bool) void {
-    show_window(self.handle, state);
+    showWindow(self.handle, state);
 }
 
-fn show_window(handle: ?foundation.HWND, state: bool) void {
+fn showWindow(handle: ?foundation.HWND, state: bool) void {
     if (handle) |hwnd| {
         _ = windows_and_messaging.ShowWindow(
             hwnd,
@@ -181,7 +181,7 @@ fn createUIDClass(allocator: std.mem.Allocator) AllocError![:0]u8 {
 }
 
 /// Allocate a sentinal utf16 string from a utf8 string
-fn rtUtf8ToUtf16(allocator: std.mem.Allocator, data: []const u8) Error![:0]u16 {
+fn utf8ToUtf16(allocator: std.mem.Allocator, data: []const u8) Error![:0]u16 {
     const len: usize = unicode.calcUtf16LeLen(data) catch unreachable;
     var utf16le: [:0]u16 = try allocator.allocSentinel(u16, len, 0);
     const utf16le_len = try unicode.utf8ToUtf16Le(utf16le[0..], data[0..]);

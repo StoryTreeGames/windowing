@@ -32,5 +32,5 @@ pub fn main() !void {
 
     win.show(true);
     win2.show(true);
-    events.event_loop(null);
+    events.eventLoop(null);
 }
