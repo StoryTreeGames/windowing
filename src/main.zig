@@ -16,7 +16,10 @@ fn handler(event: Event, target: Window.Target) void {
     switch (event) {
         .close => {
             target.exit();
-            std.log.debug("Closing From Handler: {any}", .{target.hwnd});
+        },
+        .input => |input| {
+            _ = input;
+            // std.debug.print("debug: {any}", .{input});
         },
         else => {},
     }
@@ -32,13 +35,30 @@ pub fn main() !void {
     }
     const allocator = gpa.allocator();
 
-    const win = try Window.init(allocator, &event_loop, .{ .title = "Zig window" });
+    const win = try Window.init(
+        allocator,
+        &event_loop,
+        .{
+            .title = "Zig window",
+            .width = 300,
+            .height = 400,
+            .state = .minimize,
+            .resizable = false,
+        },
+    );
     defer win.deinit();
 
-    const win2 = try Window.init(allocator, &event_loop, .{});
+    const win2 = try Window.init(
+        allocator,
+        &event_loop,
+        .{
+            .width = 1000,
+            .height = 1200,
+            .theme = .light,
+        },
+    );
     defer win2.deinit();
+    win2.minimize();
 
-    win.show(true);
-    win2.show(true);
     event_loop.run();
 }

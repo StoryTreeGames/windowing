@@ -1,3 +1,4 @@
+// Credit: https://github.com/dmgk/zig-uuid
 // Fast allocation-free v4 UUIDs.
 // Inspired by the Go implementation at github.com/skeeto/uuid
 

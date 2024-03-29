@@ -160,7 +160,7 @@ pub fn build(b: *std.Build) void {
     // Standard optimization options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .Debug });
 
     const lib = b.addStaticLibrary(.{
         .name = "znwl",
@@ -186,6 +186,8 @@ pub fn build(b: *std.Build) void {
     switch (builtin.target.os.tag) {
         // Windows OS dependencies
         .windows => {
+            // Build without console
+            // exe.subsystem = .Windows;
             exe.root_module.addImport(
                 "win32",
                 // zigwin32 doesn't work well with target and optimize variables passed in
