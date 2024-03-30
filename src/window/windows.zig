@@ -262,11 +262,11 @@ pub fn deinit(self: Window) void {
 
 /// Create/Allocate a unique window class with a uuid v4 prefixed with `ZNWL-`
 fn createUIDClass(allocator: std.mem.Allocator) AllocError![:0]u8 {
-    var class = try std.ArrayList(u8).initCapacity(allocator, 41);
+    var class = try std.ArrayList(u8).initCapacity(allocator, 45);
     defer class.deinit();
 
     const uuid = UUID.init();
-    try std.fmt.format(class.writer(), "ZNWL-{s}", .{uuid});
+    try std.fmt.format(class.writer(), "ZNWL-FUL-{s}", .{uuid});
 
     const uid: []u8 = try class.toOwnedSlice();
 

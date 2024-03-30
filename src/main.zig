@@ -42,7 +42,6 @@ pub fn main() !void {
             .title = "Zig window",
             .width = 300,
             .height = 400,
-            .state = .minimize,
             .resizable = false,
         },
     );
@@ -58,7 +57,6 @@ pub fn main() !void {
         },
     );
     defer win2.deinit();
-    win2.minimize();
 
     event_loop.run();
 }
