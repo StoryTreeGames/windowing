@@ -12,16 +12,33 @@ const gdi = win32.graphics.gdi;
 const dwm = win32.graphics.dwm;
 const zig = win32.zig;
 
+const KF_ALTDOWN = windows_and_messaging.KF_ALTDOWN;
+const KF_REPEAT = windows_and_messaging.KF_REPEAT;
+
 const Error = error{ InvalidUtf8, OutOfMemory, SystemCreateWindow };
 
 const T = @import("win32").zig.L;
 
-const UUID = @import("root").uuid.UUID;
+const UUID = @import("root").root.uuid.UUID;
 
-const Event = @import("root").events.Event;
-const EventLoop = @import("root").events.EventLoop;
+const Event = @import("root").root.events.Event;
+const EventLoop = @import("root").root.events.EventLoop;
+const KeyCode = @import("root").root.input.KeyCode;
+const KeyEvent = @import("root").root.events.KeyEvent;
 
 const Window = @This();
+
+const KeyState = struct {
+    ctrl: bool,
+    shift: bool,
+    pub fn init() KeyState {
+        return .{
+            .ctrl = false,
+            .shift = false,
+        };
+    }
+};
+var key_state: KeyState = KeyState.init();
 
 title: [:0]const u8,
 class: [:0]const u8,
@@ -52,6 +69,29 @@ pub const Target = struct {
     }
 };
 
+fn key_event(wparam: usize, lparam: isize) KeyEvent {
+    const hiword: usize = @intCast(lparam >> 16);
+    const key: KeyCode = @enumFromInt(wparam);
+
+    return .{
+        .virtual = wparam,
+        .scan = @truncate(hiword),
+        .key = key,
+        .alt = if (key == .MENU) false else ((lparam >> 16) & KF_ALTDOWN) == KF_ALTDOWN,
+    };
+}
+
+fn key_down_event(wparam: usize, lparam: isize) Event {
+    const flags: usize = @intCast(lparam);
+    const repeat: bool = ((flags >> 16) & KF_REPEAT) == KF_REPEAT;
+
+    if (repeat) {
+        return Event{ .keyhold = key_event(wparam, lparam) };
+    } else {
+        return Event{ .keydown = key_event(wparam, lparam) };
+    }
+}
+
 fn wndProc(
     hwnd: foundation.HWND,
     uMsg: u32,
@@ -81,13 +121,47 @@ fn wndProc(
         const event_loop: ?*EventLoop = @ptrFromInt(lptr);
 
         if (event_loop) |el| {
+            const target = Target{ .hwnd = hwnd, .event_loop = el };
             switch (uMsg) {
                 windows_and_messaging.WM_CLOSE => {
-                    const target = Target{ .hwnd = hwnd, .event_loop = el };
                     if (el.handler) |handler| {
                         handler(Event.close, target);
                     } else {
                         target.exit();
+                    }
+                },
+                windows_and_messaging.WM_SYSKEYDOWN => {
+                    if (el.handler) |handler| {
+                        handler(
+                            key_down_event(wparam, lparam),
+                            target,
+                        );
+                    }
+                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
+                },
+                windows_and_messaging.WM_SYSKEYUP => {
+                    if (el.handler) |handler| {
+                        handler(
+                            Event{ .keyup = key_event(wparam, lparam) },
+                            target,
+                        );
+                    }
+                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
+                },
+                windows_and_messaging.WM_KEYDOWN => {
+                    if (el.handler) |handler| {
+                        handler(
+                            key_down_event(wparam, lparam),
+                            target,
+                        );
+                    }
+                },
+                windows_and_messaging.WM_KEYUP => {
+                    if (el.handler) |handler| {
+                        handler(
+                            Event{ .keyup = key_event(wparam, lparam) },
+                            target,
+                        );
                     }
                 },
                 else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
@@ -155,9 +229,16 @@ pub fn init(
 
     const class = try createUIDClass(allocator);
     const classWide = try utf8ToUtf16(allocator, class[0..]);
-    // std.debug.print("debug: Create Window ['{s}'] {s}", .{ title, class });
 
-    var window = Window{ .title = title, .titleWide = titleWide, .class = class, .classWide = classWide, .handle = null, .allocator = allocator, .event_loop = event_loop };
+    var window = Window{
+        .title = title,
+        .titleWide = titleWide,
+        .class = class,
+        .classWide = classWide,
+        .handle = null,
+        .allocator = allocator,
+        .event_loop = event_loop,
+    };
 
     const instance = library_loader.GetModuleHandleW(null);
 

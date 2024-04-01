@@ -5,10 +5,10 @@ const zig = win32.zig;
 const windows_and_messaging = win32.ui.windows_and_messaging;
 
 const Window = @import("window.zig");
-pub const events = @import("events.zig");
-const Event = events.Event;
-const EventLoop = events.EventLoop;
-pub const uuid = @import("uuid.zig");
+pub const root = @import("root.zig");
+
+const Event = root.events.Event;
+const EventLoop = root.events.EventLoop;
 
 const UNICODE = true;
 
@@ -17,9 +17,16 @@ fn handler(event: Event, target: Window.Target) void {
         .close => {
             target.exit();
         },
-        .input => |input| {
-            _ = input;
-            // std.debug.print("debug: {any}", .{input});
+        .keydown => |ke| {
+            switch (ke.key) {
+                .ESCAPE => target.exit(), // Exit after releasing escape key
+                else => {
+                    std.log.debug("PRESS   [ {s} ]", .{@tagName(ke.key)});
+                },
+            }
+        },
+        .keyup => |ke| {
+            std.log.debug("RELEASE [ {s} ]", .{@tagName(ke.key)});
         },
         else => {},
     }

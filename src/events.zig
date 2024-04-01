@@ -5,11 +5,22 @@ const windows_and_messaging = @import("win32").ui.windows_and_messaging;
 
 const Window = @import("window.zig");
 const Target = Window.Target;
+const KeyCode = @import("root").root.input.KeyCode;
+
+pub const KeyEvent = struct {
+    alt: bool = false,
+    virtual: usize,
+    scan: u8,
+    key: KeyCode,
+};
 
 pub const Event = union(enum) {
     repaint,
     close,
-    input: union(enum) { keyboard: struct {}, mouse: struct {} },
+    keydown: KeyEvent,
+    keyup: KeyEvent,
+    keyhold: KeyEvent,
+    mouse: union {},
 };
 
 pub const EventLoop = struct {
@@ -17,11 +28,10 @@ pub const EventLoop = struct {
     windowCount: usize,
     handler: ?*const fn (event: Event, target: Target) void,
 
-    pub fn init(handler: ?*const fn (event: Event, target: Target) void) EventLoop {
-        return EventLoop{
-            .windowCount = 0,
-            .handler = handler,
-        };
+    pub fn init(
+        handler: ?*const fn (event: Event, target: Target) void,
+    ) EventLoop {
+        return EventLoop{ .windowCount = 0, .handler = handler };
     }
 
     pub fn decrement(self: *EventLoop) void {
