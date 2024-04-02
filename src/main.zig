@@ -4,43 +4,42 @@ const win32 = @import("win32");
 const zig = win32.zig;
 const windows_and_messaging = win32.ui.windows_and_messaging;
 
-const Window = @import("window.zig");
 pub const root = @import("root.zig");
 
+const Window = root.Window;
 const Event = root.events.Event;
 const EventLoop = root.events.EventLoop;
-
-const UNICODE = true;
 
 fn event_handler(event: Event, target: Window.Target) void {
     switch (event) {
         .close => {
             target.exit();
         },
-        .keydown => |ke| {
+        .key_input => |ke| {
             switch (ke.key) {
-                .ESCAPE => target.exit(), // Exit after releasing escape key
+                .escape => if (ke.state == .pressed) target.exit(), // Exit after releasing escape key
                 else => {
-                    std.log.debug("PRESS   [ {s} ]", .{@tagName(ke.key)});
+                    std.log.debug("{s} [ {s} ]", .{
+                        if (ke.state == .pressed) "PRESS" else "RELEASE",
+                        @tagName(ke.key),
+                    });
                 },
             }
         },
-        .keyup => |ke| {
-            std.log.debug("RELEASE [ {s} ]", .{@tagName(ke.key)});
+        .mouse_input => |me| {
+            std.log.debug("Mouse Input: {any}", .{me});
         },
-        .mousemove => |me| {
-            if (me.buttons) |buttons| {
-                _ = buttons;
-                std.log.debug("MOUSE (x: {d}, y: {d})", .{ me.x, me.y });
-            }
+        .mouse_move => |me| {
+            std.log.debug("Move: (x: {d}, y: {d})", .{ me.x, me.y });
         },
-        .scroll => |scroll| {
-            std.log.debug("{any} [LBUTTON: {any}]", .{ scroll, scroll.info.isLButton() });
+        .mouse_scroll => |scroll| {
+            std.log.debug("Scroll: {any}", .{scroll});
         },
         else => {},
     }
 }
 
+// TODO: How to handle persistent state through the event loop
 pub fn main() !void {
     var event_loop = EventLoop.init(&event_handler);
 

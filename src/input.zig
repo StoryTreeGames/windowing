@@ -1,93 +1,81 @@
 /// Keyboard key to keycode mapping
 pub const KeyCode = enum(u32) {
-    /// Left mouse button
-    LBUTTON = 0x01,
-    /// Right mouse button
-    RBUTTON = 0x02,
-    /// Control-break processing
-    CANCEL = 0x03,
-    /// Middle mouse button
-    MBUTTON = 0x04,
-    /// X1 mouse button
-    XBUTTON1 = 0x05,
-    /// X2 mouse button
-    XBUTTON2 = 0x06,
-    /// BACKSPACE key
-    BACK = 0x08,
-    /// TAB key
-    TAB = 0x09,
-    /// CLEAR key
-    CLEAR = 0x0C,
-    /// ENTER key
-    RETURN = 0x0D,
-    /// SHIFT key
-    SHIFT = 0x10,
-    /// CTRL key
-    CONTROL = 0x11,
-    /// ALT key
-    MENU = 0x12,
-    /// PAUSE key
-    PAUSE = 0x13,
-    /// CAPS LOCK key
-    CAPITAL = 0x14,
-    /// IME Kana mode
-    // KANA = 0x15,
-    /// IME Hangul mode
-    HANGUL = 0x15,
-    /// IME On
-    IME_ON = 0x16,
-    /// IME Junja mode
-    JUNJA = 0x17,
-    /// IME final mode
-    FINAL = 0x18,
-    /// IME Hanja mode
-    // HANJA = 0x19,
-    /// IME Kanji mode
-    KANJI = 0x19,
-    /// IME Off
-    IME_OFF = 0x1A,
-    /// ESC key
-    ESCAPE = 0x1B,
-    /// IME convert
-    CONVERT = 0x1C,
-    /// IME nonconvert
-    NONCONVERT = 0x1D,
-    /// IME accept
-    ACCEPT = 0x1E,
-    /// IME mode change request
-    MODECHANGE = 0x1F,
-    /// SPACEBAR
-    SPACE = 0x20,
-    /// PAGE UP key
-    PRIOR = 0x21,
-    /// PAGE DOWN key
-    NEXT = 0x22,
-    /// END key
-    END = 0x23,
-    /// HOME key
-    HOME = 0x24,
-    /// LEFT ARROW key
-    LEFT = 0x25,
-    /// UP ARROW key
-    UP = 0x26,
-    /// RIGHT ARROW key
-    RIGHT = 0x27,
-    /// DOWN ARROW key
-    DOWN = 0x28,
-    /// SELECT key
-    SELECT = 0x29,
-    /// PRINT key
-    PRINT = 0x2A,
-    /// EXECUTE key
-    EXECUTE = 0x2B,
-    /// PRINT SCREEN key
-    SNAPSHOT = 0x2C,
-    /// INS key
-    INSERT = 0x2D,
-    /// DEL key
-    DELETE = 0x2E,
-    /// HELP key
-    HELP = 0x2F,
+    /// backspace key
+    back = 0x08,
+    /// tab key
+    tab = 0x09,
+    /// clear key
+    clear = 0x0c,
+    /// enter key
+    @"return" = 0x0d,
+    /// shift key
+    shift = 0x10,
+    /// ctrl key
+    control = 0x11,
+    /// alt key
+    menu = 0x12,
+    /// pause key
+    pause = 0x13,
+    /// caps lock key
+    capital = 0x14,
+    /// ime kana mode
+    // kana = 0x15,
+    /// ime hangul mode
+    hangul = 0x15,
+    /// ime on
+    ime_on = 0x16,
+    /// ime junja mode
+    junja = 0x17,
+    /// ime final mode
+    final = 0x18,
+    /// ime hanja mode
+    // hanja = 0x19,
+    /// ime kanji mode
+    kanji = 0x19,
+    /// ime off
+    ime_off = 0x1a,
+    /// esc key
+    escape = 0x1b,
+    /// ime convert
+    convert = 0x1c,
+    /// ime nonconvert
+    nonconvert = 0x1d,
+    /// ime accept
+    accept = 0x1e,
+    /// ime mode change request
+    modechange = 0x1f,
+    /// spacebar
+    space = 0x20,
+    /// page up key
+    prior = 0x21,
+    /// page down key
+    next = 0x22,
+    /// end key
+    end = 0x23,
+    /// home key
+    home = 0x24,
+    /// left arrow key
+    left = 0x25,
+    /// up arrow key
+    up = 0x26,
+    /// right arrow key
+    right = 0x27,
+    /// down arrow key
+    down = 0x28,
+    /// select key
+    select = 0x29,
+    /// print key
+    print = 0x2a,
+    /// execute key
+    execute = 0x2b,
+    /// print screen key
+    snapshot = 0x2c,
+    /// ins key
+    insert = 0x2d,
+    /// del key
+    delete = 0x2e,
+    /// help key
+    help = 0x2f,
     /// 0 key
     @"0" = 0x30,
     /// 1 key
@@ -108,261 +96,257 @@ pub const KeyCode = enum(u32) {
     @"8" = 0x38,
     /// 9 key
     @"9" = 0x39,
-    /// A key
-    A = 0x41,
-    /// B key
-    B = 0x42,
-    /// C key
-    C = 0x43,
-    /// D key
-    D = 0x44,
-    /// E key
-    E = 0x45,
-    /// F key
-    F = 0x46,
-    /// G key
-    G = 0x47,
-    /// H key
-    H = 0x48,
-    /// I key
-    I = 0x49,
-    /// J key
-    J = 0x4A,
-    /// K key
-    K = 0x4B,
-    /// L key
-    L = 0x4C,
-    /// M key
-    M = 0x4D,
-    /// N key
-    N = 0x4E,
-    /// O key
-    O = 0x4F,
-    /// P key
-    P = 0x50,
-    /// Q key
-    Q = 0x51,
-    /// R key
-    R = 0x52,
-    /// S key
-    S = 0x53,
-    /// T key
-    T = 0x54,
-    /// U key
-    U = 0x55,
-    /// V key
-    V = 0x56,
-    /// W key
-    W = 0x57,
-    /// X key
-    X = 0x58,
-    /// Y key
-    Y = 0x59,
-    /// Z key
-    Z = 0x5A,
-    /// Left Windows key
-    LSUPER = 0x5B,
-    /// Right Windows key
-    RSUPER = 0x5C,
-    /// Applications key
-    APPS = 0x5D,
-    /// Computer Sleep key
-    SLEEP = 0x5F,
-    /// Numeric keypad 0 key
-    NUMPAD0 = 0x60,
-    /// Numeric keypad 1 key
-    NUMPAD1 = 0x61,
-    /// Numeric keypad 2 key
-    NUMPAD2 = 0x62,
-    /// Numeric keypad 3 key
-    NUMPAD3 = 0x63,
-    /// Numeric keypad 4 key
-    NUMPAD4 = 0x64,
-    /// Numeric keypad 5 key
-    NUMPAD5 = 0x65,
-    /// Numeric keypad 6 key
-    NUMPAD6 = 0x66,
-    /// Numeric keypad 7 key
-    NUMPAD7 = 0x67,
-    /// Numeric keypad 8 key
-    NUMPAD8 = 0x68,
-    /// Numeric keypad 9 key
-    NUMPAD9 = 0x69,
-    /// Multiply key
-    MULTIPLY = 0x6A,
-    /// Add key
-    ADD = 0x6B,
-    /// Separator key
-    SEPARATOR = 0x6C,
-    /// Subtract key
-    SUBTRACT = 0x6D,
-    /// Decimal key
-    DECIMAL = 0x6E,
-    /// Divide key
-    DIVIDE = 0x6F,
-    /// F1 key
-    F1 = 0x70,
-    /// F2 key
-    F2 = 0x71,
-    /// F3 key
-    F3 = 0x72,
-    /// F4 key
-    F4 = 0x73,
-    /// F5 key
-    F5 = 0x74,
-    /// F6 key
-    F6 = 0x75,
-    /// F7 key
-    F7 = 0x76,
-    /// F8 key
-    F8 = 0x77,
-    /// F9 key
-    F9 = 0x78,
-    /// F10 key
-    F10 = 0x79,
-    /// F11 key
-    F11 = 0x7A,
-    /// F12 key
-    F12 = 0x7B,
-    /// F13 key
-    F13 = 0x7C,
-    /// F14 key
-    F14 = 0x7D,
-    /// F15 key
-    F15 = 0x7E,
-    /// F16 key
-    F16 = 0x7F,
-    /// F17 key
-    F17 = 0x80,
-    /// F18 key
-    F18 = 0x81,
-    /// F19 key
-    F19 = 0x82,
-    /// F20 key
-    F20 = 0x83,
-    /// F21 key
-    F21 = 0x84,
-    /// F22 key
-    F22 = 0x85,
-    /// F23 key
-    F23 = 0x86,
-    /// F24 key
-    F24 = 0x87,
-    /// NUM LOCK key
-    NUMLOCK = 0x90,
-    /// SCROLL LOCK key
-    SCROLL = 0x91,
-    /// Left SHIFT key
-    LSHIFT = 0xA0,
-    /// Right SHIFT key
-    RSHIFT = 0xA1,
-    /// Left CONTROL key
-    LCONTROL = 0xA2,
-    /// Right CONTROL key
-    RCONTROL = 0xA3,
-    /// Left ALT key
-    LMENU = 0xA4,
-    /// Right ALT key
-    RMENU = 0xA5,
-    /// Browser Back key
-    BROWSER_BACK = 0xA6,
-    /// Browser Forward key
-    BROWSER_FORWARD = 0xA7,
-    /// Browser Refresh key
-    BROWSER_REFRESH = 0xA8,
-    /// Browser Stop key
-    BROWSER_STOP = 0xA9,
-    /// Browser Search key
-    BROWSER_SEARCH = 0xAA,
-    /// Browser Favorites key
-    BROWSER_FAVORITES = 0xAB,
-    /// Browser Start and Home key
-    BROWSER_HOME = 0xAC,
-    /// Volume Mute key
-    VOLUME_MUTE = 0xAD,
-    /// Volume Down key
-    VOLUME_DOWN = 0xAE,
-    /// Volume Up key
-    VOLUME_UP = 0xAF,
-    /// Next Track key
-    MEDIA_NEXT_TRACK = 0xB0,
-    /// Previous Track key
-    MEDIA_PREV_TRACK = 0xB1,
-    /// Stop Media key
-    MEDIA_STOP = 0xB2,
-    /// Play/Pause Media key
-    MEDIA_PLAY_PAUSE = 0xB3,
-    /// Start Mail key
-    LAUNCH_MAIL = 0xB4,
-    /// Select Media key
-    LAUNCH_MEDIA_SELECT = 0xB5,
-    /// Start Application 1 key
-    LAUNCH_APP1 = 0xB6,
-    /// Start Application 2 key
-    LAUNCH_APP2 = 0xB7,
-    /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the ;: key
-    COLON = 0xBA,
-    /// For any country/region, the + key
-    PLUS = 0xBB,
-    /// For any country/region, the , key
-    COMMA = 0xBC,
-    /// For any country/region, the - key
-    MINUS = 0xBD,
-    /// For any country/region, the . key
-    PERIOD = 0xBE,
-    /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the /? key
-    SLASH = 0xBF,
-    /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the `~ key
-    TILDE = 0xC0,
-    /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the [{ key
-    LBRACKET = 0xDB,
-    /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the \\| key
-    BACKSLASH = 0xDC,
-    /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the ]} key
-    RBRACKET = 0xDD,
-    /// Used for miscellaneous characters; it can vary by keyboard. For the US standard keyboard, the '" key
-    QUOTE = 0xDE,
-    /// Used for miscellaneous characters; it can vary by keyboard.
-    OEM_8 = 0xDF,
-    /// The <> keys on the US standard keyboard, or the \\| key on the non-US 102-key keyboard
-    OEM_102 = 0xE2,
-    /// IME PROCESS key
-    PROCESSKEY = 0xE5,
-    /// Used to pass Unicode characters as if they were keystrokes. The PACKET key is the low word of a 32-bit Virtual Key value used for non-keyboard input methods. For more information, see Remark in KEYBDINPUT, SendInput, WM_KEYDOWN, and WM_KEYUP
-    PACKET = 0xE7,
-    /// Attn key
-    ATTN = 0xF6,
-    /// CrSel key
-    CRSEL = 0xF7,
-    /// ExSel key
-    EXSEL = 0xF8,
-    /// Erase EOF key
-    EREOF = 0xF9,
-    /// Play key
-    PLAY = 0xFA,
-    /// Zoom key
-    ZOOM = 0xFB,
-    /// Reserved
-    NONAME = 0xFC,
-    /// PA1 key
-    PA1 = 0xFD,
-    /// Clear key
-    OEM_CLEAR = 0xFE,
+    /// a key
+    a = 0x41,
+    /// b key
+    b = 0x42,
+    /// c key
+    c = 0x43,
+    /// d key
+    d = 0x44,
+    /// e key
+    e = 0x45,
+    /// f key
+    f = 0x46,
+    /// g key
+    g = 0x47,
+    /// h key
+    h = 0x48,
+    /// i key
+    i = 0x49,
+    /// j key
+    j = 0x4a,
+    /// k key
+    k = 0x4b,
+    /// l key
+    l = 0x4c,
+    /// m key
+    m = 0x4d,
+    /// n key
+    n = 0x4e,
+    /// o key
+    o = 0x4f,
+    /// p key
+    p = 0x50,
+    /// q key
+    q = 0x51,
+    /// r key
+    r = 0x52,
+    /// s key
+    s = 0x53,
+    /// t key
+    t = 0x54,
+    /// u key
+    u = 0x55,
+    /// v key
+    v = 0x56,
+    /// w key
+    w = 0x57,
+    /// x key
+    x = 0x58,
+    /// y key
+    y = 0x59,
+    /// z key
+    z = 0x5a,
+    /// left windows key
+    lsuper = 0x5b,
+    /// right windows key
+    rsuper = 0x5c,
+    /// applications key
+    apps = 0x5d,
+    /// computer sleep key
+    sleep = 0x5f,
+    /// numeric keypad 0 key
+    numpad0 = 0x60,
+    /// numeric keypad 1 key
+    numpad1 = 0x61,
+    /// numeric keypad 2 key
+    numpad2 = 0x62,
+    /// numeric keypad 3 key
+    numpad3 = 0x63,
+    /// numeric keypad 4 key
+    numpad4 = 0x64,
+    /// numeric keypad 5 key
+    numpad5 = 0x65,
+    /// numeric keypad 6 key
+    numpad6 = 0x66,
+    /// numeric keypad 7 key
+    numpad7 = 0x67,
+    /// numeric keypad 8 key
+    numpad8 = 0x68,
+    /// numeric keypad 9 key
+    numpad9 = 0x69,
+    /// multiply key
+    multiply = 0x6a,
+    /// add key
+    add = 0x6b,
+    /// separator key
+    separator = 0x6c,
+    /// subtract key
+    subtract = 0x6d,
+    /// decimal key
+    decimal = 0x6e,
+    /// divide key
+    divide = 0x6f,
+    /// f1 key
+    f1 = 0x70,
+    /// f2 key
+    f2 = 0x71,
+    /// f3 key
+    f3 = 0x72,
+    /// f4 key
+    f4 = 0x73,
+    /// f5 key
+    f5 = 0x74,
+    /// f6 key
+    f6 = 0x75,
+    /// f7 key
+    f7 = 0x76,
+    /// f8 key
+    f8 = 0x77,
+    /// f9 key
+    f9 = 0x78,
+    /// f10 key
+    f10 = 0x79,
+    /// f11 key
+    f11 = 0x7a,
+    /// f12 key
+    f12 = 0x7b,
+    /// f13 key
+    f13 = 0x7c,
+    /// f14 key
+    f14 = 0x7d,
+    /// f15 key
+    f15 = 0x7e,
+    /// f16 key
+    f16 = 0x7f,
+    /// f17 key
+    f17 = 0x80,
+    /// f18 key
+    f18 = 0x81,
+    /// f19 key
+    f19 = 0x82,
+    /// f20 key
+    f20 = 0x83,
+    /// f21 key
+    f21 = 0x84,
+    /// f22 key
+    f22 = 0x85,
+    /// f23 key
+    f23 = 0x86,
+    /// f24 key
+    f24 = 0x87,
+    /// num lock key
+    numlock = 0x90,
+    /// scroll lock key
+    scroll = 0x91,
+    /// left shift key
+    lshift = 0xa0,
+    /// right shift key
+    rshift = 0xa1,
+    /// left control key
+    lcontrol = 0xa2,
+    /// right control key
+    rcontrol = 0xa3,
+    /// left alt key
+    lmenu = 0xa4,
+    /// right alt key
+    rmenu = 0xa5,
+    /// browser back key
+    browser_back = 0xa6,
+    /// browser forward key
+    browser_forward = 0xa7,
+    /// browser refresh key
+    browser_refresh = 0xa8,
+    /// browser stop key
+    browser_stop = 0xa9,
+    /// browser search key
+    browser_search = 0xaa,
+    /// browser favorites key
+    browser_favorites = 0xab,
+    /// browser start and home key
+    browser_home = 0xac,
+    /// volume mute key
+    volume_mute = 0xad,
+    /// volume down key
+    volume_down = 0xae,
+    /// volume up key
+    volume_up = 0xaf,
+    /// next track key
+    media_next_track = 0xb0,
+    /// previous track key
+    media_prev_track = 0xb1,
+    /// stop media key
+    media_stop = 0xb2,
+    /// play/pause media key
+    media_play_pause = 0xb3,
+    /// start mail key
+    launch_mail = 0xb4,
+    /// select media key
+    launch_media_select = 0xb5,
+    /// start application 1 key
+    launch_app1 = 0xb6,
+    /// start application 2 key
+    launch_app2 = 0xb7,
+    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the ;: key
+    colon = 0xba,
+    /// for any country/region, the + key
+    plus = 0xbb,
+    /// for any country/region, the , key
+    comma = 0xbc,
+    /// for any country/region, the - key
+    minus = 0xbd,
+    /// for any country/region, the . key
+    period = 0xbe,
+    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the /? key
+    slash = 0xbf,
+    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the `~ key
+    tilde = 0xc0,
+    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the [{ key
+    lbracket = 0xdb,
+    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the \\| key
+    backslash = 0xdc,
+    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the ]} key
+    rbracket = 0xdd,
+    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the '" key
+    quote = 0xde,
+    /// used for miscellaneous characters; it can vary by keyboard.
+    oem_8 = 0xdf,
+    /// the <> keys on the us standard keyboard, or the \\| key on the non-us 102-key keyboard
+    oem_102 = 0xe2,
+    /// ime process key
+    processkey = 0xe5,
+    /// used to pass unicode characters as if they were keystrokes. the packet key is the low word of a 32-bit virtual key value used for non-keyboard input methods. for more information, see remark in keybdinput, sendinput, wm_keydown, and wm_keyup
+    packet = 0xe7,
+    /// attn key
+    attn = 0xf6,
+    /// crsel key
+    crsel = 0xf7,
+    /// exsel key
+    exsel = 0xf8,
+    /// erase eof key
+    ereof = 0xf9,
+    /// play key
+    play = 0xfa,
+    /// zoom key
+    zoom = 0xfb,
+    /// reserved
+    noname = 0xfc,
+    /// pa1 key
+    pa1 = 0xfd,
+    /// clear key
+    oem_clear = 0xFE,
 };
 
-pub const MouseVirtualKey = enum(u32) {
-    /// The left mouse button is down.
-    LBUTTON = 0x0001,
-    /// The middle mouse button is down.
-    MBUTTON = 0x0010,
-    /// The right mouse button is down.
-    RBUTTON = 0x0002,
-    /// The first X button is down.
-    XBUTTON1 = 0x0020,
-    /// The second X button is down.
-    XBUTTON2 = 0x0040,
-    /// The CTRL key is down.
-    CONTROL = 0x0008,
-    /// The SHIFT key is down.
-    SHIFT = 0x0004,
+pub const MouseButton = enum(u32) {
+    /// The left mouse button.
+    left = 0x0001,
+    /// The middle mouse button.
+    middle = 0x0010,
+    /// The right mouse button.
+    right = 0x0002,
+    /// The first X button.
+    x1 = 0x0020,
+    /// The second X button.
+    x2 = 0x0040,
 };

@@ -25,7 +25,9 @@ const Event = @import("root").root.events.Event;
 const EventLoop = @import("root").root.events.EventLoop;
 const KeyCode = @import("root").root.input.KeyCode;
 const MouseVirtualKey = @import("root").root.input.MouseVirtualKey;
+const MouseButton = @import("root").root.input.MouseButton;
 const KeyEvent = @import("root").root.events.KeyEvent;
+const ButtonState = @import("root").root.events.ButtonState;
 
 const Window = @This();
 
@@ -70,27 +72,27 @@ pub const Target = struct {
     }
 };
 
-fn keyEvent(wparam: usize, lparam: isize) KeyEvent {
+fn keyEvent(wparam: usize, lparam: isize, state: ButtonState) KeyEvent {
     const hiword: usize = @intCast(lparam >> 16);
     const key: KeyCode = @enumFromInt(wparam);
 
     return .{
+        .state = state,
         .virtual = wparam,
         .scan = @truncate(hiword),
         .key = key,
-        .alt = if (key == .MENU) false else ((lparam >> 16) & KF_ALTDOWN) == KF_ALTDOWN,
+        .alt = if (key == .menu) false else ((lparam >> 16) & KF_ALTDOWN) == KF_ALTDOWN,
     };
 }
 
-fn keyDownEvent(wparam: usize, lparam: isize) Event {
+fn keyDownEvent(wparam: usize, lparam: isize) ?Event {
     const flags: usize = @intCast(lparam);
     const repeat: bool = ((flags >> 16) & KF_REPEAT) == KF_REPEAT;
 
-    if (repeat) {
-        return Event{ .keyhold = keyEvent(wparam, lparam) };
-    } else {
-        return Event{ .keydown = keyEvent(wparam, lparam) };
+    if (!repeat) {
+        return Event{ .key_input = keyEvent(wparam, lparam, .pressed) };
     }
+    return null;
 }
 
 fn wndProc(
@@ -128,76 +130,99 @@ fn wndProc(
                     el.handler(Event.close, target);
                 },
                 windows_and_messaging.WM_SYSKEYDOWN => {
-                    el.handler(
-                        keyDownEvent(wparam, lparam),
-                        target,
-                    );
+                    if (keyDownEvent(wparam, lparam)) |ev| {
+                        el.handler(
+                            ev,
+                            target,
+                        );
+                    }
                     return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 windows_and_messaging.WM_SYSKEYUP => {
                     el.handler(
-                        Event{ .keyup = keyEvent(wparam, lparam) },
+                        Event{ .key_input = keyEvent(wparam, lparam, .released) },
                         target,
                     );
                     return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
-                windows_and_messaging.WM_KEYDOWN => {
+                windows_and_messaging.WM_KEYDOWN => if (keyDownEvent(wparam, lparam)) |ev| {
                     el.handler(
-                        keyDownEvent(wparam, lparam),
+                        ev,
                         target,
                     );
                 },
-                windows_and_messaging.WM_KEYUP => {
-                    el.handler(
-                        Event{ .keyup = keyEvent(wparam, lparam) },
-                        target,
-                    );
-                },
+                windows_and_messaging.WM_KEYUP => el.handler(
+                    Event{ .key_input = keyEvent(wparam, lparam, .released) },
+                    target,
+                ),
                 windows_and_messaging.WM_MOUSEMOVE => {
-                    const buttons: ?u16 = if (wparam == 0) null else @truncate(wparam);
                     const pos: usize = @intCast(lparam);
                     const x: u16 = @truncate(pos);
                     const y: u16 = @truncate(pos >> 16);
-                    el.handler(Event{ .mousemove = .{ .x = x, .y = y, .buttons = buttons } }, target);
+                    el.handler(Event{ .mouse_move = .{ .x = x, .y = y } }, target);
                 },
                 windows_and_messaging.WM_MOUSEWHEEL => {
                     const params: isize = @intCast(wparam);
-                    const pos: usize = @intCast(lparam);
                     const distance: i16 = @truncate(params >> 16);
 
                     el.handler(
-                        Event{ .scroll = .{
+                        Event{ .mouse_scroll = .{
                             .direction = .vertical,
-                            .info = .{
-                                .x = @truncate(pos),
-                                .y = @truncate(pos >> 16),
-                                .buttons = @truncate(wparam),
-                            },
-                            .delta = 120,
-                            .distance = @divTrunc(distance, 120),
+                            .delta = distance,
                         } },
                         target,
                     );
                 },
                 windows_and_messaging.WM_MOUSEHWHEEL => {
                     const params: isize = @intCast(wparam);
-                    const pos: usize = @intCast(lparam);
                     const distance: i16 = @truncate(params >> 16);
 
                     el.handler(
-                        Event{ .scroll = .{
+                        Event{ .mouse_scroll = .{
                             .direction = .horizontal,
-                            .info = .{
-                                .x = @truncate(pos),
-                                .y = @truncate(pos >> 16),
-                                .buttons = @truncate(wparam),
-                            },
-                            .delta = 120,
-                            .distance = @divTrunc(distance, 120),
+                            .delta = distance,
                         } },
                         target,
                     );
                 },
+                windows_and_messaging.WM_LBUTTONDOWN => el.handler(
+                    Event{ .mouse_input = .{ .state = .pressed, .button = .left } },
+                    target,
+                ),
+                windows_and_messaging.WM_LBUTTONUP => el.handler(
+                    Event{ .mouse_input = .{ .state = .released, .button = .left } },
+                    target,
+                ),
+                windows_and_messaging.WM_MBUTTONDOWN => el.handler(
+                    Event{ .mouse_input = .{ .state = .pressed, .button = .middle } },
+                    target,
+                ),
+                windows_and_messaging.WM_MBUTTONUP => el.handler(
+                    Event{ .mouse_input = .{ .state = .released, .button = .middle } },
+                    target,
+                ),
+                windows_and_messaging.WM_RBUTTONDOWN => el.handler(
+                    Event{ .mouse_input = .{ .state = .pressed, .button = .right } },
+                    target,
+                ),
+                windows_and_messaging.WM_RBUTTONUP => el.handler(
+                    Event{ .mouse_input = .{ .state = .released, .button = .right } },
+                    target,
+                ),
+                windows_and_messaging.WM_XBUTTONDOWN => el.handler(
+                    Event{ .mouse_input = .{
+                        .state = .pressed,
+                        .button = if ((wparam >> 16) & 0x0001 == 0x0001) .x1 else .x2,
+                    } },
+                    target,
+                ),
+                windows_and_messaging.WM_XBUTTONUP => el.handler(
+                    Event{ .mouse_input = .{
+                        .state = .released,
+                        .button = if ((wparam >> 16) & 0x0001 == 0x0001) .x1 else .x2,
+                    } },
+                    target,
+                ),
                 else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
             }
         } else {

@@ -7,73 +7,29 @@ const Window = @import("window.zig");
 const Target = Window.Target;
 const KeyCode = @import("root").root.input.KeyCode;
 const MouseVirtualKey = @import("root").root.input.MouseVirtualKey;
+const MouseButton = @import("root").root.input.MouseButton;
 
 pub const KeyEvent = struct {
+    /// Current button state, i.e. pressed or released
+    state: ButtonState,
+    /// Whether the alt key is pressed
     alt: bool = false,
+    /// Virtual key code
     virtual: usize,
+    /// Scan code
     scan: u8,
+    /// Key enum representation
     key: KeyCode,
 };
 
-pub const MouseInfo = struct {
+pub const ButtonState = enum {
+    pressed,
+    released,
+};
+
+pub const Position = struct {
     x: u16,
     y: u16,
-    buttons: ?u16,
-
-    /// The CTRL key is down.
-    pub fn isControl(self: @This()) bool {
-        if (self.buttons) |buttons| {
-            return buttons & @intFromEnum(MouseVirtualKey.CONTROL) == @intFromEnum(MouseVirtualKey.CONTROL);
-        }
-        return false;
-    }
-    /// The left mouse button is down.
-    pub fn isLButton(self: @This()) bool {
-        if (self.buttons) |buttons| {
-            return buttons & @intFromEnum(MouseVirtualKey.LBUTTON) == @intFromEnum(MouseVirtualKey.LBUTTON);
-        }
-        return false;
-    }
-
-    /// The middle mouse button is down.
-    pub fn isMButton(self: @This()) bool {
-        if (self.buttons) |buttons| {
-            return buttons & @intFromEnum(MouseVirtualKey.MBUTTON) == @intFromEnum(MouseVirtualKey.MBUTTON);
-        }
-        return false;
-    }
-
-    /// The right mouse button is down.
-    pub fn isRButton(self: @This()) bool {
-        if (self.buttons) |buttons| {
-            return buttons & @intFromEnum(MouseVirtualKey.RBUTTON) == @intFromEnum(MouseVirtualKey.RBUTTON);
-        }
-        return false;
-    }
-
-    /// The SHIFT key is down.
-    pub fn isShift(self: @This()) bool {
-        if (self.buttons) |buttons| {
-            return buttons & @intFromEnum(MouseVirtualKey.SHIFT) == @intFromEnum(MouseVirtualKey.SHIFT);
-        }
-        return false;
-    }
-
-    /// The first X button is down.
-    pub fn isXButton1(self: @This()) bool {
-        if (self.buttons) |buttons| {
-            return buttons & @intFromEnum(MouseVirtualKey.XBUTTON1) == @intFromEnum(MouseVirtualKey.XBUTTON1);
-        }
-        return false;
-    }
-
-    /// The second X button is down.
-    pub fn isXButton2(self: @This()) bool {
-        if (self.buttons) |buttons| {
-            return buttons & @intFromEnum(MouseVirtualKey.XBUTTON2) == @intFromEnum(MouseVirtualKey.XBUTTON2);
-        }
-        return false;
-    }
 };
 
 pub const ScrollDirection = enum {
@@ -82,28 +38,47 @@ pub const ScrollDirection = enum {
 };
 
 pub const ScrollEvent = struct {
+    /// Whether the scrolling is horizontal or vertical
     direction: ScrollDirection,
-    info: MouseInfo,
-    delta: u16,
-    distance: i16,
+    /// The amount of pixels scrolled.
+    ///
+    /// Positive scrolling is to the right and down respectively for horizontal and vertical
+    delta: i16,
 };
 
+pub const MouseEvent = struct {
+    /// Mouse button state, i.e. pressed or released
+    state: ButtonState,
+    /// What mouse button was pressed: left, right, middle, x1, or x2
+    button: MouseButton,
+};
+
+/// Window events that occur and are sent by the OS
 pub const Event = union(enum) {
+    /// Repaint request
     repaint,
+    /// Close request
     close,
-    keydown: KeyEvent,
-    keyup: KeyEvent,
-    keyhold: KeyEvent,
-    mousemove: MouseInfo,
-    scroll: ScrollEvent,
-    mouseclick,
+    /// Key input event post
+    key_input: KeyEvent,
+    /// Mouse button input event post
+    mouse_input: MouseEvent,
+    /// Mouse move event post
+    mouse_move: Position,
+    /// Mouse scroll event post
+    mouse_scroll: ScrollEvent,
 };
 
+/// A event context manager
+///
+/// Handles events by translating them and exposing a cross platform api
+/// to use with the event handler.
 pub const EventLoop = struct {
     _mutex: std.Thread.Mutex = std.Thread.Mutex{},
     windowCount: usize,
     handler: *const fn (event: Event, target: Target) void,
 
+    /// Create a new event loop with a given event handler
     pub fn init(
         handler: *const fn (event: Event, target: Target) void,
     ) EventLoop {
@@ -122,6 +97,7 @@ pub const EventLoop = struct {
         self.windowCount += 1;
     }
 
+    /// Run the event/message loop which allows windows to recieve events
     pub fn run(self: *EventLoop) void {
         switch (builtin.target.os.tag) {
             .windows => {

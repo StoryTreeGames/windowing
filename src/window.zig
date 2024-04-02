@@ -19,6 +19,7 @@
 /// - menu
 const builtin = @import("builtin");
 
+/// Cross platform window representation
 pub usingnamespace switch (builtin.target.os.tag) {
     .windows => @import("window/windows.zig"),
     .linux => @import("window/linux.zig"),
