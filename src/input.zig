@@ -349,3 +349,20 @@ pub const KeyCode = enum(u32) {
     /// Clear key
     OEM_CLEAR = 0xFE,
 };
+
+pub const MouseVirtualKey = enum(u32) {
+    /// The left mouse button is down.
+    LBUTTON = 0x0001,
+    /// The middle mouse button is down.
+    MBUTTON = 0x0010,
+    /// The right mouse button is down.
+    RBUTTON = 0x0002,
+    /// The first X button is down.
+    XBUTTON1 = 0x0020,
+    /// The second X button is down.
+    XBUTTON2 = 0x0040,
+    /// The CTRL key is down.
+    CONTROL = 0x0008,
+    /// The SHIFT key is down.
+    SHIFT = 0x0004,
+};

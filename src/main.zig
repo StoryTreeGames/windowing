@@ -12,7 +12,7 @@ const EventLoop = root.events.EventLoop;
 
 const UNICODE = true;
 
-fn handler(event: Event, target: Window.Target) void {
+fn event_handler(event: Event, target: Window.Target) void {
     switch (event) {
         .close => {
             target.exit();
@@ -28,12 +28,21 @@ fn handler(event: Event, target: Window.Target) void {
         .keyup => |ke| {
             std.log.debug("RELEASE [ {s} ]", .{@tagName(ke.key)});
         },
+        .mousemove => |me| {
+            if (me.buttons) |buttons| {
+                _ = buttons;
+                std.log.debug("MOUSE (x: {d}, y: {d})", .{ me.x, me.y });
+            }
+        },
+        .scroll => |scroll| {
+            std.log.debug("{any} [LBUTTON: {any}]", .{ scroll, scroll.info.isLButton() });
+        },
         else => {},
     }
 }
 
 pub fn main() !void {
-    var event_loop = EventLoop.init(&handler);
+    var event_loop = EventLoop.init(&event_handler);
 
     // Needed to allocate title and class strings
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -53,17 +62,6 @@ pub fn main() !void {
         },
     );
     defer win.deinit();
-
-    const win2 = try Window.init(
-        allocator,
-        &event_loop,
-        .{
-            .width = 1000,
-            .height = 1200,
-            .theme = .light,
-        },
-    );
-    defer win2.deinit();
 
     event_loop.run();
 }
