@@ -27,6 +27,11 @@ fn event_handler(event: Event, target: Window.Target) void {
             }
         },
         .mouse_input => |me| {
+            if (me.state == .pressed and me.button == .left) {
+                target.setCapture(true);
+            } else if (me.state == .released and me.button == .left) {
+                target.setCapture(false);
+            }
             std.log.debug("Mouse Input: {any}", .{me});
         },
         .mouse_move => |me| {
@@ -34,6 +39,12 @@ fn event_handler(event: Event, target: Window.Target) void {
         },
         .mouse_scroll => |scroll| {
             std.log.debug("Scroll: {any}", .{scroll});
+        },
+        .focused => |focused| {
+            std.log.debug("{s}", .{if (focused) "FOCUSED" else "UNFOCUSED"});
+        },
+        .resize => |re| {
+            std.log.debug("Resize: [width: {d}, height: {d}]", .{ re.width, re.height });
         },
         else => {},
     }
@@ -57,7 +68,6 @@ pub fn main() !void {
             .title = "Zig window",
             .width = 300,
             .height = 400,
-            .resizable = false,
         },
     );
     defer win.deinit();

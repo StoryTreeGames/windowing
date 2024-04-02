@@ -1,13 +1,13 @@
 const std = @import("std");
 const builtin = @import("builtin");
+
 const zig = @import("win32").zig;
 const windows_and_messaging = @import("win32").ui.windows_and_messaging;
 
 const Window = @import("window.zig");
+const KeyCode = @import("input.zig").KeyCode;
+const MouseButton = @import("input.zig").MouseButton;
 const Target = Window.Target;
-const KeyCode = @import("root").root.input.KeyCode;
-const MouseVirtualKey = @import("root").root.input.MouseVirtualKey;
-const MouseButton = @import("root").root.input.MouseButton;
 
 pub const KeyEvent = struct {
     /// Current button state, i.e. pressed or released
@@ -53,12 +53,22 @@ pub const MouseEvent = struct {
     button: MouseButton,
 };
 
+/// Event corresponding to a size
+pub const SizeEvent = struct {
+    width: u16,
+    height: u16,
+};
+
 /// Window events that occur and are sent by the OS
 pub const Event = union(enum) {
     /// Repaint request
     repaint,
     /// Close request
     close,
+    /// Resize event pose
+    resize: SizeEvent,
+    /// Focus or Unfocus event post
+    focused: bool,
     /// Key input event post
     key_input: KeyEvent,
     /// Mouse button input event post

@@ -9,7 +9,18 @@ I am fairly new to Zig and it has been a few years since I last programmed in C 
 
 I hope to keep all my projects as open source and community based as possible. Any tips, PRs, and overall help are more than welcome.
 
-> 🗒️ Note: Peek [StoryTree](https://github.com/StoryTreeGames) as the larger scoped project inspiring this one. I am currently bouncing between Zig and Rust. Rust would be easier to use with a more mature ecosystem; however, Zig is maturing a lot and is in need of some good packages for the
-> new package manager with version `0.12`. If Zig ends up being the language I use for `StoryTree` this repo will be moved to the `StoryTree` orginization.
+> ⚠️ Warn: This repo is currently exploratory and the API is subject to change with every merge into the main branch. To help with the volatile nature, this project will be split into a develop and a main branch.
 
-> ⚠️ Warn: This repo is more exploritory and the API is subject to change with every merge into the main branch. To help with the volitile nature, this project will be split into a develop and a main branch.
+## Goal
+
+The goal of this library is to write as pure of a zig library as possible to move away from GLFW and it's idioms. There
+is nothing wrong with using GLFW, I just want to try something new. This project is pulling inspiration from multiple
+other libraries and their API. This library will start off basic and naïve and grow to be smart, easy to use, and full
+of features.
+
+Hopefully this library will stay generic to be able to be used with most other libraries and projects. Some other project ideas include: game engines and GUI applications.
+
+**References**
+
+- [GLFW (C)](https://www.glfw.org/docs/3.3/window_guide.html)
+- [Winit (Rust)](https://github.com/rust-windowing/winit)

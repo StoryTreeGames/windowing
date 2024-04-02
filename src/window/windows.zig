@@ -7,6 +7,7 @@ const WINAPI = std.os.windows.WINAPI;
 const win32 = @import("win32");
 const foundation = win32.foundation;
 const windows_and_messaging = win32.ui.windows_and_messaging;
+const keyboard_and_mouse = win32.ui.input.keyboard_and_mouse;
 const library_loader = win32.system.library_loader;
 const gdi = win32.graphics.gdi;
 const dwm = win32.graphics.dwm;
@@ -20,14 +21,15 @@ const Error = error{ InvalidUtf8, OutOfMemory, SystemCreateWindow };
 const T = @import("win32").zig.L;
 
 const UUID = @import("root").root.uuid.UUID;
+const root = @import("root").root;
 
-const Event = @import("root").root.events.Event;
-const EventLoop = @import("root").root.events.EventLoop;
-const KeyCode = @import("root").root.input.KeyCode;
-const MouseVirtualKey = @import("root").root.input.MouseVirtualKey;
-const MouseButton = @import("root").root.input.MouseButton;
-const KeyEvent = @import("root").root.events.KeyEvent;
-const ButtonState = @import("root").root.events.ButtonState;
+const Event = root.events.Event;
+const EventLoop = root.events.EventLoop;
+const KeyCode = root.input.KeyCode;
+const MouseVirtualKey = root.input.MouseVirtualKey;
+const MouseButton = root.input.MouseButton;
+const KeyEvent = root.events.KeyEvent;
+const ButtonState = root.events.ButtonState;
 
 const Window = @This();
 
@@ -69,6 +71,13 @@ pub const Target = struct {
     }
     pub fn restore(self: Target) void {
         showWindow(self.hwnd, .restore);
+    }
+    pub fn setCapture(self: Target, state: bool) void {
+        if (state) {
+            _ = keyboard_and_mouse.SetCapture(self.hwnd);
+        } else {
+            _ = keyboard_and_mouse.ReleaseCapture();
+        }
     }
 };
 
@@ -126,9 +135,11 @@ fn wndProc(
         if (event_loop) |el| {
             const target = Target{ .hwnd = hwnd, .event_loop = el };
             switch (uMsg) {
+                // Request to close the window
                 windows_and_messaging.WM_CLOSE => {
                     el.handler(Event.close, target);
                 },
+                // Keyboard input evenets
                 windows_and_messaging.WM_SYSKEYDOWN => {
                     if (keyDownEvent(wparam, lparam)) |ev| {
                         el.handler(
@@ -155,12 +166,16 @@ fn wndProc(
                     Event{ .key_input = keyEvent(wparam, lparam, .released) },
                     target,
                 ),
+                // MouseMove event
                 windows_and_messaging.WM_MOUSEMOVE => {
-                    const pos: usize = @intCast(lparam);
-                    const x: u16 = @truncate(pos);
-                    const y: u16 = @truncate(pos >> 16);
-                    el.handler(Event{ .mouse_move = .{ .x = x, .y = y } }, target);
+                    if (lparam >= 0) {
+                        const pos: usize = @intCast(lparam);
+                        const x: u16 = @truncate(pos);
+                        const y: u16 = @truncate(pos >> 16);
+                        el.handler(Event{ .mouse_move = .{ .x = x, .y = y } }, target);
+                    }
                 },
+                // Mouse scrolling events
                 windows_and_messaging.WM_MOUSEWHEEL => {
                     const params: isize = @intCast(wparam);
                     const distance: i16 = @truncate(params >> 16);
@@ -185,6 +200,7 @@ fn wndProc(
                         target,
                     );
                 },
+                // Mouse button events == MouseInput
                 windows_and_messaging.WM_LBUTTONDOWN => el.handler(
                     Event{ .mouse_input = .{ .state = .pressed, .button = .left } },
                     target,
@@ -223,6 +239,19 @@ fn wndProc(
                     } },
                     target,
                 ),
+                // Check for focus and unfocus
+                windows_and_messaging.WM_SETFOCUS => el.handler(Event{ .focused = true }, target),
+                windows_and_messaging.WM_KILLFOCUS => el.handler(Event{ .focused = false }, target),
+                windows_and_messaging.WM_SIZE => {
+                    const size: usize = @intCast(lparam);
+                    el.handler(
+                        Event{ .resize = .{
+                            .width = @truncate(size),
+                            .height = @truncate(size >> 16),
+                        } },
+                        target,
+                    );
+                },
                 else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
             }
         } else {
@@ -330,7 +359,6 @@ pub fn init(
         .DLGFRAME = 1,
         .BORDER = 1,
         // Show window after it is created
-        .VISIBLE = 1, // @intFromBool(options.show),
         .MINIMIZE = @intFromBool(options.state == .minimize),
         .MAXIMIZE = @intFromBool(options.state == .maximize),
     };
@@ -364,10 +392,15 @@ pub fn init(
         .auto => value = zig.TRUE,
     }
     _ = dwm.DwmSetWindowAttribute(handle, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &value, @sizeOf(foundation.BOOL));
+    _ = windows_and_messaging.ShowWindow(window.handle, windows_and_messaging.SW_SHOWDEFAULT);
 
     return window;
 }
 
+pub fn exit(self: Target) void {
+    _ = windows_and_messaging.DestroyWindow(self.hwnd);
+    self.event_loop.decrement();
+}
 pub fn minimize(self: Window) void {
     showWindow(self.handle, .minimize);
 }
@@ -376,6 +409,13 @@ pub fn maximize(self: Window) void {
 }
 pub fn restore(self: Window) void {
     showWindow(self.handle, .restore);
+}
+pub fn setCapture(self: Window, state: bool) void {
+    if (state) {
+        _ = keyboard_and_mouse.SetCapture(self.handle);
+    } else {
+        _ = keyboard_and_mouse.ReleaseCapture();
+    }
 }
 
 fn showWindow(handle: ?foundation.HWND, state: ShowState) void {
