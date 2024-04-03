@@ -7,52 +7,89 @@ const windows_and_messaging = win32.ui.windows_and_messaging;
 pub const root = @import("root.zig");
 
 const Window = root.Window;
+const Target = Window.Target;
 const Event = root.events.Event;
 const EventLoop = root.events.EventLoop;
 
-fn event_handler(event: Event, target: Window.Target) void {
-    switch (event) {
-        .close => {
-            target.exit();
-        },
-        .key_input => |ke| {
-            switch (ke.key) {
-                .escape => if (ke.state == .pressed) target.exit(), // Exit after releasing escape key
-                else => {
-                    std.log.debug("{s} [ {s} ]", .{
-                        if (ke.state == .pressed) "PRESS" else "RELEASE",
-                        @tagName(ke.key),
-                    });
-                },
-            }
-        },
-        .mouse_input => |me| {
-            if (me.state == .pressed and me.button == .left) {
-                target.setCapture(true);
-            } else if (me.state == .released and me.button == .left) {
-                target.setCapture(false);
-            }
-            std.log.debug("Mouse Input: {any}", .{me});
-        },
-        .mouse_move => |me| {
-            std.log.debug("Move: (x: {d}, y: {d})", .{ me.x, me.y });
-        },
-        .mouse_scroll => |scroll| {
-            std.log.debug("Scroll: {any}", .{scroll});
-        },
-        .focused => |focused| {
-            std.log.debug("{s}", .{if (focused) "FOCUSED" else "UNFOCUSED"});
-        },
-        .resize => |re| {
-            std.log.debug("Resize: [width: {d}, height: {d}]", .{ re.width, re.height });
-        },
-        else => {},
-    }
-}
+const State = struct {
+    ctrl: bool = false,
+    alt: bool = false,
+    shift: bool = false,
 
-// TODO: How to handle persistent state through the event loop
+    captured: bool = false,
+    focused: bool = false,
+
+    pub fn handler(self: *anyopaque, event: Event, target: *Target) void {
+        var state: *State = @ptrCast(@alignCast(self));
+
+        switch (event) {
+            .close => {
+                target.close();
+            },
+            .key_input => |ke| {
+                switch (ke.key) {
+                    .shift => state.shift = (ke.state == .pressed),
+                    .control => state.ctrl = (ke.state == .pressed),
+                    .menu => state.alt = (ke.state == .pressed),
+                    // Exit after pressing the escape key
+                    .escape => if (ke.state == .pressed) target.close(),
+                    else => {
+                        std.log.debug("[ {s} ] {s}{s}{s}{s}", .{
+                            if (ke.state == .pressed) "PRESSED" else "RELEASED",
+                            if (state.ctrl) "ctrl+" else "",
+                            if (state.alt) "alt+" else "",
+                            if (state.shift) "shift+" else "",
+                            @tagName(ke.key),
+                        });
+                    },
+                }
+            },
+            .mouse_input => |me| {
+                if (me.state == .pressed and me.button == .left) {
+                    target.setCapture(true);
+                    state.captured = true;
+                } else if (me.state == .released and me.button == .left) {
+                    target.setCapture(false);
+                    state.captured = false;
+                }
+                std.log.debug("Mouse Input: {any}", .{me});
+            },
+            .mouse_move => |me| {
+                if (state.captured) {
+                    // Lock the cursor to the center of the screen
+                    // this is useful for situations like games where
+                    // you capture the mouse and only want the delta of how
+                    // much the mouse moved
+                    const rect = target.getRect();
+                    const x = @divTrunc(rect.width(), 2);
+                    const y = @divTrunc(rect.height(), 2);
+
+                    std.log.debug("Delta: (dx: {d}, dy: {d})", .{ me.x - x, me.y - y });
+                    target.setCursorPos(x, y);
+                } else if (state.focused) {
+                    std.log.debug("Position: (x: {d}, y: {d})", .{ me.x, me.y });
+                }
+            },
+            .mouse_scroll => |scroll| {
+                std.log.debug("Scroll: {any}", .{scroll});
+            },
+            .focused => |focused| {
+                state.focused = focused;
+            },
+            .resize => |re| {
+                if (state.focused) {
+                    std.log.debug("Resize: [width: {d}, height: {d}]", .{ re.width, re.height });
+                }
+            },
+            else => {},
+        }
+    }
+};
+
+// TODO: How to make state optional?
 pub fn main() !void {
-    var event_loop = EventLoop.init(&event_handler);
+    var state = State{};
+    var event_loop = EventLoop.init(&state, &State.handler);
 
     // Needed to allocate title and class strings
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

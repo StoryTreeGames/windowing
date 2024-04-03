@@ -7,6 +7,7 @@ const windows_and_messaging = @import("win32").ui.windows_and_messaging;
 const Window = @import("window.zig");
 const KeyCode = @import("input.zig").KeyCode;
 const MouseButton = @import("input.zig").MouseButton;
+const Position = @import("root.zig").Position;
 const Target = Window.Target;
 
 pub const KeyEvent = struct {
@@ -25,11 +26,6 @@ pub const KeyEvent = struct {
 pub const ButtonState = enum {
     pressed,
     released,
-};
-
-pub const Position = struct {
-    x: u16,
-    y: u16,
 };
 
 pub const ScrollDirection = enum {
@@ -74,7 +70,7 @@ pub const Event = union(enum) {
     /// Mouse button input event post
     mouse_input: MouseEvent,
     /// Mouse move event post
-    mouse_move: Position,
+    mouse_move: Position(u16),
     /// Mouse scroll event post
     mouse_scroll: ScrollEvent,
 };
@@ -86,13 +82,20 @@ pub const Event = union(enum) {
 pub const EventLoop = struct {
     _mutex: std.Thread.Mutex = std.Thread.Mutex{},
     windowCount: usize,
-    handler: *const fn (event: Event, target: Target) void,
+
+    state: *anyopaque,
+    handler: *const fn (self: *anyopaque, event: Event, target: *Target) void,
 
     /// Create a new event loop with a given event handler
     pub fn init(
-        handler: *const fn (event: Event, target: Target) void,
+        state: *anyopaque,
+        handler: *const fn (self: *anyopaque, event: Event, target: *Target) void,
     ) EventLoop {
-        return EventLoop{ .windowCount = 0, .handler = handler };
+        return EventLoop{ .windowCount = 0, .state = state, .handler = handler };
+    }
+
+    pub fn handle_event(self: @This(), event: Event, target: *Target) void {
+        self.handler(self.state, event, target);
     }
 
     pub fn decrement(self: *EventLoop) void {

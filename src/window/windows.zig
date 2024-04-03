@@ -23,6 +23,8 @@ const T = @import("win32").zig.L;
 const UUID = @import("root").root.uuid.UUID;
 const root = @import("root").root;
 
+const Position = root.Position;
+
 const Event = root.events.Event;
 const EventLoop = root.events.EventLoop;
 const KeyCode = root.input.KeyCode;
@@ -55,31 +57,7 @@ handle: ?foundation.HWND,
 allocator: std.mem.Allocator,
 event_loop: *EventLoop,
 
-pub const Target = struct {
-    hwnd: foundation.HWND,
-    event_loop: *EventLoop,
-
-    pub fn exit(self: Target) void {
-        _ = windows_and_messaging.DestroyWindow(self.hwnd);
-        self.event_loop.decrement();
-    }
-    pub fn minimize(self: Target) void {
-        showWindow(self.hwnd, .minimize);
-    }
-    pub fn maximize(self: Target) void {
-        showWindow(self.hwnd, .maximize);
-    }
-    pub fn restore(self: Target) void {
-        showWindow(self.hwnd, .restore);
-    }
-    pub fn setCapture(self: Target, state: bool) void {
-        if (state) {
-            _ = keyboard_and_mouse.SetCapture(self.hwnd);
-        } else {
-            _ = keyboard_and_mouse.ReleaseCapture();
-        }
-    }
-};
+pub const Target = @This();
 
 fn keyEvent(wparam: usize, lparam: isize, state: ButtonState) KeyEvent {
     const hiword: usize = @intCast(lparam >> 16);
@@ -119,7 +97,7 @@ fn wndProc(
         if (create_struct.lpCreateParams) |create_params| {
             // Cast from anyopaque to an expected EventLoop
             // this includes casting the pointer alignment
-            const event_loop: *EventLoop = @ptrCast(@alignCast(create_params));
+            const event_loop: *Window = @ptrCast(@alignCast(create_params));
             // Cast pointer to isize for setting data
             const long_ptr: usize = @intFromPtr(event_loop);
             const ptr: isize = @intCast(long_ptr);
@@ -130,19 +108,20 @@ fn wndProc(
         const ptr = windows_and_messaging.GetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA);
         // Cast int to optional EventLoop pointer
         const lptr: usize = @intCast(ptr);
-        const event_loop: ?*EventLoop = @ptrFromInt(lptr);
+        const window: ?*Window = @ptrFromInt(lptr);
 
-        if (event_loop) |el| {
-            const target = Target{ .hwnd = hwnd, .event_loop = el };
+        if (window) |target| {
+            const el = target.event_loop;
+
             switch (uMsg) {
                 // Request to close the window
                 windows_and_messaging.WM_CLOSE => {
-                    el.handler(Event.close, target);
+                    el.handle_event(Event.close, target);
                 },
                 // Keyboard input evenets
                 windows_and_messaging.WM_SYSKEYDOWN => {
                     if (keyDownEvent(wparam, lparam)) |ev| {
-                        el.handler(
+                        el.handle_event(
                             ev,
                             target,
                         );
@@ -150,19 +129,19 @@ fn wndProc(
                     return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 windows_and_messaging.WM_SYSKEYUP => {
-                    el.handler(
+                    el.handle_event(
                         Event{ .key_input = keyEvent(wparam, lparam, .released) },
                         target,
                     );
                     return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 windows_and_messaging.WM_KEYDOWN => if (keyDownEvent(wparam, lparam)) |ev| {
-                    el.handler(
+                    el.handle_event(
                         ev,
                         target,
                     );
                 },
-                windows_and_messaging.WM_KEYUP => el.handler(
+                windows_and_messaging.WM_KEYUP => el.handle_event(
                     Event{ .key_input = keyEvent(wparam, lparam, .released) },
                     target,
                 ),
@@ -172,7 +151,7 @@ fn wndProc(
                         const pos: usize = @intCast(lparam);
                         const x: u16 = @truncate(pos);
                         const y: u16 = @truncate(pos >> 16);
-                        el.handler(Event{ .mouse_move = .{ .x = x, .y = y } }, target);
+                        el.handle_event(Event{ .mouse_move = .{ .x = x, .y = y } }, target);
                     }
                 },
                 // Mouse scrolling events
@@ -180,7 +159,7 @@ fn wndProc(
                     const params: isize = @intCast(wparam);
                     const distance: i16 = @truncate(params >> 16);
 
-                    el.handler(
+                    el.handle_event(
                         Event{ .mouse_scroll = .{
                             .direction = .vertical,
                             .delta = distance,
@@ -192,7 +171,7 @@ fn wndProc(
                     const params: isize = @intCast(wparam);
                     const distance: i16 = @truncate(params >> 16);
 
-                    el.handler(
+                    el.handle_event(
                         Event{ .mouse_scroll = .{
                             .direction = .horizontal,
                             .delta = distance,
@@ -201,38 +180,38 @@ fn wndProc(
                     );
                 },
                 // Mouse button events == MouseInput
-                windows_and_messaging.WM_LBUTTONDOWN => el.handler(
+                windows_and_messaging.WM_LBUTTONDOWN => el.handle_event(
                     Event{ .mouse_input = .{ .state = .pressed, .button = .left } },
                     target,
                 ),
-                windows_and_messaging.WM_LBUTTONUP => el.handler(
+                windows_and_messaging.WM_LBUTTONUP => el.handle_event(
                     Event{ .mouse_input = .{ .state = .released, .button = .left } },
                     target,
                 ),
-                windows_and_messaging.WM_MBUTTONDOWN => el.handler(
+                windows_and_messaging.WM_MBUTTONDOWN => el.handle_event(
                     Event{ .mouse_input = .{ .state = .pressed, .button = .middle } },
                     target,
                 ),
-                windows_and_messaging.WM_MBUTTONUP => el.handler(
+                windows_and_messaging.WM_MBUTTONUP => el.handle_event(
                     Event{ .mouse_input = .{ .state = .released, .button = .middle } },
                     target,
                 ),
-                windows_and_messaging.WM_RBUTTONDOWN => el.handler(
+                windows_and_messaging.WM_RBUTTONDOWN => el.handle_event(
                     Event{ .mouse_input = .{ .state = .pressed, .button = .right } },
                     target,
                 ),
-                windows_and_messaging.WM_RBUTTONUP => el.handler(
+                windows_and_messaging.WM_RBUTTONUP => el.handle_event(
                     Event{ .mouse_input = .{ .state = .released, .button = .right } },
                     target,
                 ),
-                windows_and_messaging.WM_XBUTTONDOWN => el.handler(
+                windows_and_messaging.WM_XBUTTONDOWN => el.handle_event(
                     Event{ .mouse_input = .{
                         .state = .pressed,
                         .button = if ((wparam >> 16) & 0x0001 == 0x0001) .x1 else .x2,
                     } },
                     target,
                 ),
-                windows_and_messaging.WM_XBUTTONUP => el.handler(
+                windows_and_messaging.WM_XBUTTONUP => el.handle_event(
                     Event{ .mouse_input = .{
                         .state = .released,
                         .button = if ((wparam >> 16) & 0x0001 == 0x0001) .x1 else .x2,
@@ -240,11 +219,11 @@ fn wndProc(
                     target,
                 ),
                 // Check for focus and unfocus
-                windows_and_messaging.WM_SETFOCUS => el.handler(Event{ .focused = true }, target),
-                windows_and_messaging.WM_KILLFOCUS => el.handler(Event{ .focused = false }, target),
+                windows_and_messaging.WM_SETFOCUS => el.handle_event(Event{ .focused = true }, target),
+                windows_and_messaging.WM_KILLFOCUS => el.handle_event(Event{ .focused = false }, target),
                 windows_and_messaging.WM_SIZE => {
                     const size: usize = @intCast(lparam);
-                    el.handler(
+                    el.handle_event(
                         Event{ .resize = .{
                             .width = @truncate(size),
                             .height = @truncate(size >> 16),
@@ -308,7 +287,7 @@ pub fn init(
     allocator: std.mem.Allocator,
     event_loop: *EventLoop,
     options: CreateOptions,
-) Error!Window {
+) Error!*Window {
     const title: [:0]u8 = try allocator.allocSentinel(u8, options.title.len, 0);
     @memcpy(title, options.title);
     const titleWide: [:0]const u16 = try utf8ToUtf16(allocator, title);
@@ -318,7 +297,8 @@ pub fn init(
     const class = try createUIDClass(allocator);
     const classWide = try utf8ToUtf16(allocator, class[0..]);
 
-    var window = Window{
+    var window = try allocator.create(Window);
+    window.* = .{
         .title = title,
         .titleWide = titleWide,
         .class = class,
@@ -375,7 +355,7 @@ pub fn init(
         null, // Parent
         null, // Menu
         instance,
-        @ptrCast(event_loop), // WM_CREATE lpParam
+        @ptrCast(window), // WM_CREATE lpParam
     );
 
     if (handle == null) {
@@ -397,19 +377,51 @@ pub fn init(
     return window;
 }
 
-pub fn exit(self: Target) void {
-    _ = windows_and_messaging.DestroyWindow(self.hwnd);
+/// Close the current window
+pub fn close(self: Window) void {
+    _ = windows_and_messaging.DestroyWindow(self.handle);
     self.event_loop.decrement();
 }
+
+/// Minimize the window
 pub fn minimize(self: Window) void {
     showWindow(self.handle, .minimize);
 }
+
+/// Maximize the window
 pub fn maximize(self: Window) void {
     showWindow(self.handle, .maximize);
 }
+
+/// Restore the window to its default windowed state
 pub fn restore(self: Window) void {
     showWindow(self.handle, .restore);
 }
+
+/// Get the windows current rect (bounding box)
+pub fn getRect(self: Window) root.Rect(i32) {
+    var rect = foundation.RECT{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
+
+    _ = windows_and_messaging.GetClientRect(self.handle, &rect);
+    return .{
+        .left = rect.left,
+        .right = rect.right,
+        .top = rect.top,
+        .bottom = rect.bottom,
+    };
+}
+
+/// Set the cursors position relative to the window
+pub fn setCursorPos(self: Window, x: i32, y: i32) void {
+    var point = foundation.POINT{
+        .x = x,
+        .y = y,
+    };
+    _ = gdi.ClientToScreen(self.handle, &point);
+    _ = windows_and_messaging.SetCursorPos(point.x, point.y);
+}
+
+/// Set the mouse to be captured by the window, or release it from the window
 pub fn setCapture(self: Window, state: bool) void {
     if (state) {
         _ = keyboard_and_mouse.SetCapture(self.handle);
@@ -433,11 +445,12 @@ fn showWindow(handle: ?foundation.HWND, state: ShowState) void {
 /// Release window allocated memory.
 ///
 /// Right now this includes the window classname
-pub fn deinit(self: Window) void {
+pub fn deinit(self: *Window) void {
     self.allocator.free(self.class);
     self.allocator.free(self.classWide);
     self.allocator.free(self.title);
     self.allocator.free(self.titleWide);
+    self.allocator.destroy(self);
 }
 
 /// Create/Allocate a unique window class with a uuid v4 prefixed with `ZNWL-`
