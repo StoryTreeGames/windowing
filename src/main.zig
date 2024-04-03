@@ -34,13 +34,15 @@ const State = struct {
                     // Exit after pressing the escape key
                     .escape => if (ke.state == .pressed) target.close(),
                     else => {
-                        std.log.debug("[ {s} ] {s}{s}{s}{s}", .{
-                            if (ke.state == .pressed) "PRESSED" else "RELEASED",
-                            if (state.ctrl) "ctrl+" else "",
-                            if (state.alt) "alt+" else "",
-                            if (state.shift) "shift+" else "",
-                            @tagName(ke.key),
-                        });
+                        if (ke.state == .pressed) {
+                            std.log.debug("[ {s} ] {s}{s}{s}{s}", .{
+                                if (ke.state == .pressed) "PRESSED" else "RELEASED",
+                                if (state.ctrl) "ctrl+" else "",
+                                if (state.alt) "alt+" else "",
+                                if (state.shift) "shift+" else "",
+                                @tagName(ke.key),
+                            });
+                        }
                     },
                 }
             },
@@ -105,6 +107,7 @@ pub fn main() !void {
             .title = "Zig window",
             .width = 300,
             .height = 400,
+            .icon = "assets\\icon.ico",
         },
     );
     defer win.deinit();

@@ -16,7 +16,7 @@ const zig = win32.zig;
 const KF_ALTDOWN = windows_and_messaging.KF_ALTDOWN;
 const KF_REPEAT = windows_and_messaging.KF_REPEAT;
 
-const Error = error{ InvalidUtf8, OutOfMemory, SystemCreateWindow };
+const Error = error{ InvalidUtf8, OutOfMemory, FileNotFound, SystemCreateWindow };
 
 const T = @import("win32").zig.L;
 
@@ -47,11 +47,12 @@ const KeyState = struct {
 };
 var key_state: KeyState = KeyState.init();
 
-title: [:0]const u8,
-class: [:0]const u8,
+title: []const u8,
+class: []const u8,
 
 titleWide: [:0]const u16,
 classWide: [:0]const u16,
+icon: ?[:0]const u16,
 
 handle: ?foundation.HWND,
 allocator: std.mem.Allocator,
@@ -272,6 +273,8 @@ const CreateOptions = struct {
     /// Change whether the window can be resized
     resizable: bool = true,
 
+    icon: ?[]const u8 = null,
+
     /// Set to dark or light theme. Or set to auto to match the system theme
     theme: enum { dark, light, auto } = .auto,
 };
@@ -288,7 +291,7 @@ pub fn init(
     event_loop: *EventLoop,
     options: CreateOptions,
 ) Error!*Window {
-    const title: [:0]u8 = try allocator.allocSentinel(u8, options.title.len, 0);
+    const title: []u8 = try allocator.alloc(u8, options.title.len);
     @memcpy(title, options.title);
     const titleWide: [:0]const u16 = try utf8ToUtf16(allocator, title);
 
@@ -298,18 +301,29 @@ pub fn init(
     const classWide = try utf8ToUtf16(allocator, class[0..]);
 
     var window = try allocator.create(Window);
+
     window.* = .{
         .title = title,
         .titleWide = titleWide,
         .class = class,
         .classWide = classWide,
+        .icon = null,
         .handle = null,
         .allocator = allocator,
         .event_loop = event_loop,
     };
 
-    const instance = library_loader.GetModuleHandleW(null);
+    if (options.icon) |icon| {
+        const temp = std.fs.cwd().realpathAlloc(allocator, icon) catch |err| switch (err) {
+            error.FileNotFound => return error.FileNotFound,
+            else => return error.InvalidUtf8,
+        };
+        errdefer allocator.free(temp);
+        window.icon = try utf8ToUtf16(allocator, temp);
+        allocator.free(temp);
+    }
 
+    const instance = library_loader.GetModuleHandleW(null);
     const wnd_class = windows_and_messaging.WNDCLASSW{
         .lpszClassName = classWide.ptr,
 
@@ -317,7 +331,19 @@ pub fn init(
         .cbClsExtra = 0,
         .cbWndExtra = 0,
 
-        .hIcon = windows_and_messaging.LoadIconW(null, windows_and_messaging.IDI_APPLICATION),
+        .hIcon = if (window.icon) |icon| @ptrCast(windows_and_messaging.LoadImageW(
+            null,
+            icon.ptr,
+            windows_and_messaging.IMAGE_ICON,
+            0,
+            0,
+            windows_and_messaging.IMAGE_FLAGS{
+                .DEFAULTSIZE = 1,
+                .LOADFROMFILE = 1,
+                .SHARED = 1,
+                .LOADTRANSPARENT = 1,
+            },
+        )) else windows_and_messaging.LoadIconW(null, windows_and_messaging.IDI_APPLICATION),
         .hCursor = windows_and_messaging.LoadCursorW(null, windows_and_messaging.IDC_ARROW),
         .hbrBackground = gdi.GetStockObject(gdi.WHITE_BRUSH),
         .lpszMenuName = null,
@@ -450,24 +476,21 @@ pub fn deinit(self: *Window) void {
     self.allocator.free(self.classWide);
     self.allocator.free(self.title);
     self.allocator.free(self.titleWide);
+    if (self.icon) |icon| {
+        self.allocator.free(icon);
+    }
     self.allocator.destroy(self);
 }
 
 /// Create/Allocate a unique window class with a uuid v4 prefixed with `ZNWL-`
-fn createUIDClass(allocator: std.mem.Allocator) AllocError![:0]u8 {
+fn createUIDClass(allocator: std.mem.Allocator) AllocError![]u8 {
     var class = try std.ArrayList(u8).initCapacity(allocator, 45);
     defer class.deinit();
 
     const uuid = UUID.init();
     try std.fmt.format(class.writer(), "ZNWL-FUL-{s}", .{uuid});
 
-    const uid: []u8 = try class.toOwnedSlice();
-
-    const result: [:0]u8 = try allocator.allocSentinel(u8, uid.len, 0);
-    @memcpy(result, uid);
-    allocator.free(uid);
-
-    return result;
+    return try class.toOwnedSlice();
 }
 
 /// Allocate a sentinal utf16 string from a utf8 string
