@@ -104,9 +104,7 @@ pub fn main() !void {
             .width = 300,
             .height = 400,
             .icon = "assets\\icon.ico",
-            .cursor = .{
-                .custom = .{ .path = "assets\\icon.ico" },
-            },
+            .cursor = .{ .icon = .Pointer },
         },
     );
     defer win.deinit();
