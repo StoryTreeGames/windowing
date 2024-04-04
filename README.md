@@ -20,4 +20,5 @@ Hopefully this library will stay generic enough to be able to be used with most 
 
 - [GLFW (C)](https://www.glfw.org/docs/3.3/window_guide.html)
 - [Winit (Rust)](https://github.com/rust-windowing/winit)
+  - [windows::window](https://github.com/rust-windowing/winit/blob/4cd6877e8e19e7e1ba957a409394dca1af4afcdd/src/platform_impl/windows/window.rs#L432))
 - [CursorIcon (Rust)](https://docs.rs/cursor-icon/latest/cursor_icon/)

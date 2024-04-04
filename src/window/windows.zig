@@ -1,3 +1,4 @@
+/// Reference Rust Winit library for handling window operations
 const std = @import("std");
 const AllocError = std.mem.Allocator.Error;
 const unicode = std.unicode;
@@ -16,36 +17,23 @@ const zig = win32.zig;
 const KF_ALTDOWN = windows_and_messaging.KF_ALTDOWN;
 const KF_REPEAT = windows_and_messaging.KF_REPEAT;
 
-const Error = error{ InvalidUtf8, OutOfMemory, FileNotFound, SystemCreateWindow };
-
-const T = @import("win32").zig.L;
-
-const UUID = @import("root").root.uuid.UUID;
-const root = @import("root").root;
+const root = @import("../root.zig");
 
 const Position = root.Position;
-
+const UUID = root.uuid.UUID;
 const Event = root.events.Event;
 const EventLoop = root.events.EventLoop;
 const KeyCode = root.input.KeyCode;
-const MouseVirtualKey = root.input.MouseVirtualKey;
 const MouseButton = root.input.MouseButton;
 const KeyEvent = root.events.KeyEvent;
 const ButtonState = root.events.ButtonState;
+const CursorIcon = root.cursor.CursorIcon;
+const Cursor = root.cursor.Cursor;
+const cursorHandle = root.cursor.cursorHandle;
 
 const Window = @This();
 
-const KeyState = struct {
-    ctrl: bool,
-    shift: bool,
-    pub fn init() KeyState {
-        return .{
-            .ctrl = false,
-            .shift = false,
-        };
-    }
-};
-var key_state: KeyState = KeyState.init();
+const Error = error{ InvalidUtf8, OutOfMemory, FileNotFound, SystemCreateWindow };
 
 title: []const u8,
 class: []const u8,
@@ -53,6 +41,14 @@ class: []const u8,
 titleWide: [:0]const u16,
 classWide: [:0]const u16,
 icon: ?[:0]const u16,
+cursor: union(enum) {
+    icon: CursorIcon,
+    custom: struct {
+        path: [:0]const u16,
+        width: i32,
+        height: i32,
+    },
+},
 
 handle: ?foundation.HWND,
 allocator: std.mem.Allocator,
@@ -253,6 +249,9 @@ pub const ShowState = enum { maximize, minimize, restore, fullscreen };
 ///
 /// Ref: https://docs.rs/winit/latest/winit/window/struct.Window.html#method.set_window_level
 /// for ideas on what options to have
+/// - [ ] Level
+/// - [ ] Cursor
+/// - [ ] Auto update theme
 const CreateOptions = struct {
     /// The title of the window
     title: []const u8 = "",
@@ -274,6 +273,7 @@ const CreateOptions = struct {
     resizable: bool = true,
 
     icon: ?[]const u8 = null,
+    cursor: Cursor = .{ .icon = .Default },
 
     /// Set to dark or light theme. Or set to auto to match the system theme
     theme: enum { dark, light, auto } = .auto,
@@ -292,15 +292,20 @@ pub fn init(
     options: CreateOptions,
 ) Error!*Window {
     const title: []u8 = try allocator.alloc(u8, options.title.len);
+    errdefer allocator.free(title);
     @memcpy(title, options.title);
     const titleWide: [:0]const u16 = try utf8ToUtf16(allocator, title);
+    errdefer allocator.free(titleWide);
 
     event_loop.increment();
 
     const class = try createUIDClass(allocator);
+    errdefer allocator.free(class);
     const classWide = try utf8ToUtf16(allocator, class[0..]);
+    errdefer allocator.free(classWide);
 
     var window = try allocator.create(Window);
+    errdefer allocator.destroy(window);
 
     window.* = .{
         .title = title,
@@ -308,6 +313,7 @@ pub fn init(
         .class = class,
         .classWide = classWide,
         .icon = null,
+        .cursor = .{ .icon = .Default },
         .handle = null,
         .allocator = allocator,
         .event_loop = event_loop,
@@ -316,12 +322,40 @@ pub fn init(
     if (options.icon) |icon| {
         const temp = std.fs.cwd().realpathAlloc(allocator, icon) catch |err| switch (err) {
             error.FileNotFound => return error.FileNotFound,
+            error.OutOfMemory => return error.OutOfMemory,
             else => return error.InvalidUtf8,
         };
         errdefer allocator.free(temp);
         window.icon = try utf8ToUtf16(allocator, temp);
         allocator.free(temp);
     }
+    errdefer if (window.icon) |icon| {
+        allocator.free(icon);
+    };
+
+    switch (options.cursor) {
+        .icon => |icon| window.cursor = .{ .icon = icon },
+        .custom => |custom| {
+            const temp = std.fs.cwd().realpathAlloc(allocator, custom.path) catch |err| switch (err) {
+                error.FileNotFound => return error.FileNotFound,
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return error.InvalidUtf8,
+            };
+            errdefer allocator.free(temp);
+            window.cursor = .{
+                .custom = .{
+                    .path = try utf8ToUtf16(allocator, temp),
+                    .width = custom.width,
+                    .height = custom.height,
+                },
+            };
+            allocator.free(temp);
+        },
+    }
+    errdefer switch (window.cursor) {
+        .custom => |custom| allocator.free(custom.path),
+        else => {},
+    };
 
     const instance = library_loader.GetModuleHandleW(null);
     const wnd_class = windows_and_messaging.WNDCLASSW{
@@ -344,7 +378,22 @@ pub fn init(
                 .LOADTRANSPARENT = 1,
             },
         )) else windows_and_messaging.LoadIconW(null, windows_and_messaging.IDI_APPLICATION),
-        .hCursor = windows_and_messaging.LoadCursorW(null, windows_and_messaging.IDC_ARROW),
+        .hCursor = switch (window.cursor) {
+            .icon => |icon| windows_and_messaging.LoadCursorA(null, cursorHandle(icon)),
+            .custom => |custom| @ptrCast(windows_and_messaging.LoadImageW(
+                null,
+                custom.path.ptr,
+                windows_and_messaging.IMAGE_CURSOR,
+                custom.width,
+                custom.height,
+                windows_and_messaging.IMAGE_FLAGS{
+                    .DEFAULTSIZE = 1,
+                    .LOADFROMFILE = 1,
+                    .SHARED = 1,
+                    .LOADTRANSPARENT = 1,
+                },
+            )),
+        },
         .hbrBackground = gdi.GetStockObject(gdi.WHITE_BRUSH),
         .lpszMenuName = null,
 
@@ -478,6 +527,10 @@ pub fn deinit(self: *Window) void {
     self.allocator.free(self.titleWide);
     if (self.icon) |icon| {
         self.allocator.free(icon);
+    }
+    switch (self.cursor) {
+        .custom => |custom| self.allocator.free(custom.path),
+        else => {},
     }
     self.allocator.destroy(self);
 }
