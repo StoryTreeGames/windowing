@@ -1,15 +1,11 @@
 const std = @import("std");
 
-const win32 = @import("win32");
-const zig = win32.zig;
-const windows_and_messaging = win32.ui.windows_and_messaging;
+pub const znwl = @import("znwl");
 
-pub const root = @import("root.zig");
-
-const Window = root.Window;
+const Window = znwl.Window;
 const Target = Window.Target;
-const Event = root.events.Event;
-const EventLoop = root.events.EventLoop;
+const Event = znwl.events.Event;
+const EventLoop = znwl.events.EventLoop;
 
 const State = struct {
     ctrl: bool = false,
@@ -108,6 +104,9 @@ pub fn main() !void {
             .width = 300,
             .height = 400,
             .icon = "assets\\icon.ico",
+            .cursor = .{
+                .custom = .{ .path = "assets\\icon.ico" },
+            },
         },
     );
     defer win.deinit();
