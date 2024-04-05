@@ -1,3 +1,8 @@
+// X11 Reference: https://www.cl.cam.ac.uk/~mgk25/ucs/keysymdef.h
+// Win32 Reference: https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+
+// Winit Reference: https://github.com/rust-windowing/winit/blob/master/src/keyboard.rs#L1476
+
 /// Keyboard key to keycode mapping
 pub const KeyCode = enum(u32) {
     /// backspace key

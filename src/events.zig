@@ -115,9 +115,9 @@ pub const EventLoop = struct {
         switch (builtin.target.os.tag) {
             .windows => {
                 var message: windows_and_messaging.MSG = undefined;
-                while (self.windowCount > 0 and windows_and_messaging.GetMessageW(&message, null, 0, 0) == zig.TRUE) {
+                while (self.windowCount > 0 and windows_and_messaging.GetMessageA(&message, null, 0, 0) == zig.TRUE) {
                     _ = windows_and_messaging.TranslateMessage(&message);
-                    _ = windows_and_messaging.DispatchMessageW(&message);
+                    _ = windows_and_messaging.DispatchMessageA(&message);
                 }
             },
             else => {},

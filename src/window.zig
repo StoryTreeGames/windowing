@@ -18,11 +18,54 @@
 /// - fullscreen
 /// - menu
 const builtin = @import("builtin");
+const Cursor = @import("cursor.zig").Cursor;
+
+pub const Error = error{ InvalidUtf8, OutOfMemory, FileNotFound, SystemCreateWindow };
 
 /// Cross platform window representation
 pub usingnamespace switch (builtin.target.os.tag) {
-    .windows => @import("window/windows.zig"),
+    .windows => struct {
+        pub usingnamespace @import("window/windows.zig");
+        pub const DEFAULT: i32 = -2147483648;
+    },
     .linux => @import("window/linux.zig"),
     .macos => @import("window/apple.zig"),
     else => @compileError("znwl doesn't support the current operating system: " ++ @tagName(builtin.target.os.tag)),
+};
+
+pub const ShowState = enum { maximize, minimize, restore, fullscreen };
+pub const Theme = enum { dark, light, auto };
+
+/// Options to apply to a window when it is created
+///
+/// Ref: https://docs.rs/winit/latest/winit/window/struct.Window.html#method.set_window_level
+/// for ideas on what options to have
+/// - [ ] Level
+/// - [ ] Cursor
+/// - [ ] Auto update theme
+pub const CreateOptions = struct {
+    /// The title of the window
+    title: []const u8 = "",
+
+    /// X position of the top left corner
+    x: ?i32 = null,
+    /// Y position of the top left corner
+    y: ?i32 = null,
+    /// Width of the window
+    width: ?i32 = null,
+    /// Height of the window
+    height: ?i32 = null,
+
+    /// Whether the window should be shown
+    // show: bool = true,
+    /// Whether the window should be maximized, minimized, fullscreen, or restored
+    state: ShowState = .restore,
+    /// Change whether the window can be resized
+    resizable: bool = true,
+
+    icon: ?[]const u8 = null,
+    cursor: Cursor = .{ .icon = .Default },
+
+    /// Set to dark or light theme. Or set to auto to match the system theme
+    theme: Theme = .auto,
 };

@@ -1,3 +1,5 @@
+const util = @import("util.zig");
+
 pub const Cursor = union(enum) {
     icon: CursorIcon,
     custom: struct {
@@ -10,6 +12,12 @@ pub const Cursor = union(enum) {
     },
 };
 
+/// A cross-platform way of specifying a cursor icon. When a platform specific
+/// window loads a certain value of this enum it will translate it to a usable
+/// type.
+///
+/// Referenced from rust's cursor-icon crate.
+/// - https://github.com/rust-windowing/cursor-icon
 pub const CursorIcon = enum {
     Default,
     Pointer,
@@ -50,26 +58,21 @@ pub const CursorIcon = enum {
 
 pub usingnamespace switch (@import("builtin").target.os.tag) {
     .windows => struct {
-        pub fn makeIntResourceA(comptime value: anytype) [*:0]const u8 {
-            const usize_value = if (value >= 0) value else @as(usize, @bitCast(@as(isize, value)));
-            const temp: [*:0]const u8 = @ptrFromInt(usize_value);
-            return temp;
-        }
-        const ARROW = makeIntResourceA(@as(i32, 32512));
-        const HAND = makeIntResourceA(@as(i32, 32649));
-        const CROSS = makeIntResourceA(@as(i32, 32515));
-        const BEAM = makeIntResourceA(@as(i32, 32513));
-        const NO = makeIntResourceA(@as(i32, 32648));
-        const SIZEALL = makeIntResourceA(@as(i32, 32646));
-        const SIZEWE = makeIntResourceA(@as(i32, 32644));
-        const SIZENS = makeIntResourceA(@as(i32, 32645));
-        const SIZENESW = makeIntResourceA(@as(i32, 32643));
-        const SIZENWSE = makeIntResourceA(@as(i32, 32642));
-        const WAIT = makeIntResourceA(@as(i32, 32514));
-        const HELP = makeIntResourceA(@as(i32, 32651));
-        const APPSTARTING = makeIntResourceA(@as(i32, 32650));
+        const ARROW = util.makeIntResourceA(32512);
+        const HAND = util.makeIntResourceA(32649);
+        const CROSS = util.makeIntResourceA(32515);
+        const BEAM = util.makeIntResourceA(32513);
+        const NO = util.makeIntResourceA(32648);
+        const SIZEALL = util.makeIntResourceA(32646);
+        const SIZEWE = util.makeIntResourceA(32644);
+        const SIZENS = util.makeIntResourceA(32645);
+        const SIZENESW = util.makeIntResourceA(32643);
+        const SIZENWSE = util.makeIntResourceA(32642);
+        const WAIT = util.makeIntResourceA(32514);
+        const HELP = util.makeIntResourceA(32651);
+        const APPSTARTING = util.makeIntResourceA(32650);
 
-        pub fn cursorHandle(cursor: CursorIcon) [*:0]const u8 {
+        pub fn resource(cursor: CursorIcon) [*:0]const u8 {
             return switch (cursor) {
                 .Default => ARROW,
                 .Pointer => HAND,
