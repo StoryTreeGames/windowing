@@ -21,4 +21,13 @@ Hopefully this library will stay generic enough to be able to be used with most 
 - [GLFW (C)](https://www.glfw.org/docs/3.3/window_guide.html)
 - [Winit (Rust)](https://github.com/rust-windowing/winit)
   - [windows::window](https://github.com/rust-windowing/winit/blob/4cd6877e8e19e7e1ba957a409394dca1af4afcdd/src/platform_impl/windows/window.rs#L432))
-- [CursorIcon (Rust)](https://docs.rs/cursor-icon/latest/cursor_icon/)
+- [CursorOption (Rust)](https://docs.rs/cursor-icon/latest/cursor_icon/)
+
+## [ZigWin32 changes](https://github.com/marlersoft/zigwin32gen/)
+
+- [unionpointers.json](https://github.com/marlersoft/zigwin32gen/blob/e27e3b2adfefe1f517e459d4aa07e39d2d0c7e7f/unionpointers.json#L5)
+  - Add section for constants
+- [zig_type_formatter](https://github.com/marlersoft/zigwin32gen/blob/e27e3b2adfefe1f517e459d4aa07e39d2d0c7e7f/src/genzig.zig#L1511)
+  - Pull in union_pointer true or false from json file
+- [union_pointer_funcs](https://github.com/marlersoft/zigwin32gen/blob/e27e3b2adfefe1f517e459d4aa07e39d2d0c7e7f/src/genzig.zig#L802)
+  - duplicate logic for funcs to constants and store which which constants are union pointers

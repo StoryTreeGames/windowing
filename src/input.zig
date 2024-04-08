@@ -3,344 +3,260 @@
 
 // Winit Reference: https://github.com/rust-windowing/winit/blob/master/src/keyboard.rs#L1476
 
+pub const Key = union(enum) {
+    virtual: VirtualKey,
+    char: [4:0]u8,
+
+    /// Character code points are u16 code points and there can potentially be 2
+    /// unicode code points for a single character. This means there is a max
+    /// size of up to around 4 bytes allocated for a single character.
+    ///
+    /// This method automatically converts to u8 and gives the exact length byte array
+    /// that represents the given character
+    pub fn getChar(self: @This()) ?[]u8 {
+        for (self.char, 0..) |c, i| {
+            if (c == 0) {
+                return self.char[0..i];
+            }
+        }
+        return self.char[0..];
+    }
+};
+
 /// Keyboard key to keycode mapping
-pub const KeyCode = enum(u32) {
+pub const VirtualKey = enum(u32) {
     /// backspace key
-    back = 0x08,
+    back,
     /// tab key
-    tab = 0x09,
+    tab,
     /// clear key
-    clear = 0x0c,
+    clear,
     /// enter key
-    @"return" = 0x0d,
+    @"return",
     /// shift key
-    shift = 0x10,
+    shift,
     /// ctrl key
-    control = 0x11,
+    control,
     /// alt key
-    menu = 0x12,
+    alt,
     /// pause key
-    pause = 0x13,
+    pause,
     /// caps lock key
-    capital = 0x14,
+    caps_lock,
     /// ime kana mode
-    // kana = 0x15,
+    kana,
     /// ime hangul mode
-    hangul = 0x15,
+    hangul,
+    /// ime kana or hangul mode
+    kana_hangul,
     /// ime on
-    ime_on = 0x16,
+    ime_on,
     /// ime junja mode
-    junja = 0x17,
+    junja,
     /// ime final mode
-    final = 0x18,
+    final,
     /// ime hanja mode
-    // hanja = 0x19,
+    hanja,
     /// ime kanji mode
-    kanji = 0x19,
+    kanji,
+    /// ime hanja or kanji mode
+    hanja_kanji,
     /// ime off
-    ime_off = 0x1a,
+    ime_off,
     /// esc key
-    escape = 0x1b,
+    escape,
     /// ime convert
-    convert = 0x1c,
+    convert,
     /// ime nonconvert
-    nonconvert = 0x1d,
+    nonconvert,
     /// ime accept
-    accept = 0x1e,
+    accept,
     /// ime mode change request
-    modechange = 0x1f,
-    /// spacebar
-    space = 0x20,
+    modechange,
     /// page up key
-    prior = 0x21,
+    prior,
     /// page down key
-    next = 0x22,
+    next,
     /// end key
-    end = 0x23,
+    end,
     /// home key
-    home = 0x24,
+    home,
     /// left arrow key
-    left = 0x25,
+    left,
     /// up arrow key
-    up = 0x26,
+    up,
     /// right arrow key
-    right = 0x27,
+    right,
     /// down arrow key
-    down = 0x28,
+    down,
     /// select key
-    select = 0x29,
+    select,
     /// print key
-    print = 0x2a,
+    print,
     /// execute key
-    execute = 0x2b,
+    execute,
     /// print screen key
-    snapshot = 0x2c,
+    snapshot,
     /// ins key
-    insert = 0x2d,
+    insert,
     /// del key
-    delete = 0x2e,
+    delete,
     /// help key
-    help = 0x2f,
-    /// 0 key
-    @"0" = 0x30,
-    /// 1 key
-    @"1" = 0x31,
-    /// 2 key
-    @"2" = 0x32,
-    /// 3 key
-    @"3" = 0x33,
-    /// 4 key
-    @"4" = 0x34,
-    /// 5 key
-    @"5" = 0x35,
-    /// 6 key
-    @"6" = 0x36,
-    /// 7 key
-    @"7" = 0x37,
-    /// 8 key
-    @"8" = 0x38,
-    /// 9 key
-    @"9" = 0x39,
-    /// a key
-    a = 0x41,
-    /// b key
-    b = 0x42,
-    /// c key
-    c = 0x43,
-    /// d key
-    d = 0x44,
-    /// e key
-    e = 0x45,
-    /// f key
-    f = 0x46,
-    /// g key
-    g = 0x47,
-    /// h key
-    h = 0x48,
-    /// i key
-    i = 0x49,
-    /// j key
-    j = 0x4a,
-    /// k key
-    k = 0x4b,
-    /// l key
-    l = 0x4c,
-    /// m key
-    m = 0x4d,
-    /// n key
-    n = 0x4e,
-    /// o key
-    o = 0x4f,
-    /// p key
-    p = 0x50,
-    /// q key
-    q = 0x51,
-    /// r key
-    r = 0x52,
-    /// s key
-    s = 0x53,
-    /// t key
-    t = 0x54,
-    /// u key
-    u = 0x55,
-    /// v key
-    v = 0x56,
-    /// w key
-    w = 0x57,
-    /// x key
-    x = 0x58,
-    /// y key
-    y = 0x59,
-    /// z key
-    z = 0x5a,
+    help,
     /// left windows key
-    lsuper = 0x5b,
+    lsuper,
     /// right windows key
-    rsuper = 0x5c,
+    rsuper,
     /// applications key
-    apps = 0x5d,
+    apps,
     /// computer sleep key
-    sleep = 0x5f,
+    sleep,
     /// numeric keypad 0 key
-    numpad0 = 0x60,
+    numpad0,
     /// numeric keypad 1 key
-    numpad1 = 0x61,
+    numpad1,
     /// numeric keypad 2 key
-    numpad2 = 0x62,
+    numpad2,
     /// numeric keypad 3 key
-    numpad3 = 0x63,
+    numpad3,
     /// numeric keypad 4 key
-    numpad4 = 0x64,
+    numpad4,
     /// numeric keypad 5 key
-    numpad5 = 0x65,
+    numpad5,
     /// numeric keypad 6 key
-    numpad6 = 0x66,
+    numpad6,
     /// numeric keypad 7 key
-    numpad7 = 0x67,
+    numpad7,
     /// numeric keypad 8 key
-    numpad8 = 0x68,
+    numpad8,
     /// numeric keypad 9 key
-    numpad9 = 0x69,
+    numpad9,
     /// multiply key
-    multiply = 0x6a,
+    multiply,
     /// add key
-    add = 0x6b,
+    add,
     /// separator key
-    separator = 0x6c,
+    separator,
     /// subtract key
-    subtract = 0x6d,
+    subtract,
     /// decimal key
-    decimal = 0x6e,
+    decimal,
     /// divide key
-    divide = 0x6f,
+    divide,
     /// f1 key
-    f1 = 0x70,
+    f1,
     /// f2 key
-    f2 = 0x71,
+    f2,
     /// f3 key
-    f3 = 0x72,
+    f3,
     /// f4 key
-    f4 = 0x73,
+    f4,
     /// f5 key
-    f5 = 0x74,
+    f5,
     /// f6 key
-    f6 = 0x75,
+    f6,
     /// f7 key
-    f7 = 0x76,
+    f7,
     /// f8 key
-    f8 = 0x77,
+    f8,
     /// f9 key
-    f9 = 0x78,
+    f9,
     /// f10 key
-    f10 = 0x79,
+    f10,
     /// f11 key
-    f11 = 0x7a,
+    f11,
     /// f12 key
-    f12 = 0x7b,
+    f12,
     /// f13 key
-    f13 = 0x7c,
+    f13,
     /// f14 key
-    f14 = 0x7d,
+    f14,
     /// f15 key
-    f15 = 0x7e,
+    f15,
     /// f16 key
-    f16 = 0x7f,
+    f16,
     /// f17 key
-    f17 = 0x80,
+    f17,
     /// f18 key
-    f18 = 0x81,
+    f18,
     /// f19 key
-    f19 = 0x82,
+    f19,
     /// f20 key
-    f20 = 0x83,
+    f20,
     /// f21 key
-    f21 = 0x84,
+    f21,
     /// f22 key
-    f22 = 0x85,
+    f22,
     /// f23 key
-    f23 = 0x86,
+    f23,
     /// f24 key
-    f24 = 0x87,
+    f24,
     /// num lock key
-    numlock = 0x90,
+    num_lock,
     /// scroll lock key
-    scroll = 0x91,
-    /// left shift key
-    lshift = 0xa0,
-    /// right shift key
-    rshift = 0xa1,
-    /// left control key
-    lcontrol = 0xa2,
-    /// right control key
-    rcontrol = 0xa3,
-    /// left alt key
-    lmenu = 0xa4,
-    /// right alt key
-    rmenu = 0xa5,
+    scroll,
     /// browser back key
-    browser_back = 0xa6,
+    browser_back,
     /// browser forward key
-    browser_forward = 0xa7,
+    browser_forward,
     /// browser refresh key
-    browser_refresh = 0xa8,
+    browser_refresh,
     /// browser stop key
-    browser_stop = 0xa9,
+    browser_stop,
     /// browser search key
-    browser_search = 0xaa,
+    browser_search,
     /// browser favorites key
-    browser_favorites = 0xab,
+    browser_favorites,
     /// browser start and home key
-    browser_home = 0xac,
+    browser_home,
     /// volume mute key
-    volume_mute = 0xad,
+    volume_mute,
     /// volume down key
-    volume_down = 0xae,
+    volume_down,
     /// volume up key
-    volume_up = 0xaf,
+    volume_up,
     /// next track key
-    media_next_track = 0xb0,
+    media_next_track,
     /// previous track key
-    media_prev_track = 0xb1,
+    media_prev_track,
     /// stop media key
-    media_stop = 0xb2,
+    media_stop,
     /// play/pause media key
-    media_play_pause = 0xb3,
+    media_play_pause,
     /// start mail key
-    launch_mail = 0xb4,
+    launch_mail,
     /// select media key
-    launch_media_select = 0xb5,
+    launch_media_select,
     /// start application 1 key
-    launch_app1 = 0xb6,
+    launch_app1,
     /// start application 2 key
-    launch_app2 = 0xb7,
-    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the ;: key
-    colon = 0xba,
-    /// for any country/region, the + key
-    plus = 0xbb,
-    /// for any country/region, the , key
-    comma = 0xbc,
-    /// for any country/region, the - key
-    minus = 0xbd,
-    /// for any country/region, the . key
-    period = 0xbe,
-    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the /? key
-    slash = 0xbf,
-    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the `~ key
-    tilde = 0xc0,
-    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the [{ key
-    lbracket = 0xdb,
-    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the \\| key
-    backslash = 0xdc,
-    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the ]} key
-    rbracket = 0xdd,
-    /// used for miscellaneous characters; it can vary by keyboard. for the us standard keyboard, the '" key
-    quote = 0xde,
+    launch_app2,
     /// used for miscellaneous characters; it can vary by keyboard.
-    oem_8 = 0xdf,
+    oem_8,
     /// the <> keys on the us standard keyboard, or the \\| key on the non-us 102-key keyboard
-    oem_102 = 0xe2,
+    oem_102,
     /// ime process key
-    processkey = 0xe5,
+    processkey,
     /// used to pass unicode characters as if they were keystrokes. the packet key is the low word of a 32-bit virtual key value used for non-keyboard input methods. for more information, see remark in keybdinput, sendinput, wm_keydown, and wm_keyup
-    packet = 0xe7,
+    packet,
     /// attn key
-    attn = 0xf6,
+    attn,
     /// crsel key
-    crsel = 0xf7,
+    crsel,
     /// exsel key
-    exsel = 0xf8,
+    exsel,
     /// erase eof key
-    ereof = 0xf9,
+    ereof,
     /// play key
-    play = 0xfa,
+    play,
     /// zoom key
-    zoom = 0xfb,
+    zoom,
     /// reserved
-    noname = 0xfc,
+    noname,
     /// pa1 key
-    pa1 = 0xfd,
+    pa1,
     /// clear key
-    oem_clear = 0xFE,
+    oem_clear,
 };
 
 pub const MouseButton = enum(u32) {
@@ -354,4 +270,128 @@ pub const MouseButton = enum(u32) {
     x1 = 0x0020,
     /// The second X button.
     x2 = 0x0040,
+};
+
+pub usingnamespace switch (@import("builtin").target.os.tag) {
+    .windows => struct {
+        pub fn parseVirtualKey(wparam: usize, lparam: isize) ?VirtualKey {
+            _ = lparam;
+            return switch (wparam) {
+                0x08 => .back,
+                0x09 => .tab,
+                0x0c => .clear,
+                0x0d => .@"return",
+                0x10, 0xa0, 0xa1 => .shift,
+                0x11, 0xa2, 0xa3 => .control,
+                0x12, 0xa4, 0xa5 => .alt,
+                0x13 => .pause,
+                0x14 => .caps_lock,
+                0x15 => .kana_hangul,
+                0x16 => .ime_on,
+                0x17 => .junja,
+                0x18 => .final,
+                0x19 => .hanja_kanji,
+                0x1a => .ime_off,
+                0x1b => .escape,
+                0x1c => .convert,
+                0x1d => .nonconvert,
+                0x1e => .accept,
+                0x1f => .modechange,
+                0x21 => .prior,
+                0x22 => .next,
+                0x23 => .end,
+                0x24 => .home,
+                0x25 => .left,
+                0x26 => .up,
+                0x27 => .right,
+                0x28 => .down,
+                0x29 => .select,
+                0x2a => .print,
+                0x2b => .execute,
+                0x2c => .snapshot,
+                0x2d => .insert,
+                0x2e => .delete,
+                0x2f => .help,
+                0x5b => .lsuper,
+                0x5c => .rsuper,
+                0x5d => .apps,
+                0x5f => .sleep,
+                0x60 => .numpad0,
+                0x61 => .numpad1,
+                0x62 => .numpad2,
+                0x63 => .numpad3,
+                0x64 => .numpad4,
+                0x65 => .numpad5,
+                0x66 => .numpad6,
+                0x67 => .numpad7,
+                0x68 => .numpad8,
+                0x69 => .numpad9,
+                0x6a => .multiply,
+                0x6b => .add,
+                0x6c => .separator,
+                0x6d => .subtract,
+                0x6e => .decimal,
+                0x6f => .divide,
+                0x70 => .f1,
+                0x71 => .f2,
+                0x72 => .f3,
+                0x73 => .f4,
+                0x74 => .f5,
+                0x75 => .f6,
+                0x76 => .f7,
+                0x77 => .f8,
+                0x78 => .f9,
+                0x79 => .f10,
+                0x7a => .f11,
+                0x7b => .f12,
+                0x7c => .f13,
+                0x7d => .f14,
+                0x7e => .f15,
+                0x7f => .f16,
+                0x80 => .f17,
+                0x81 => .f18,
+                0x82 => .f19,
+                0x83 => .f20,
+                0x84 => .f21,
+                0x85 => .f22,
+                0x86 => .f23,
+                0x87 => .f24,
+                0x90 => .num_lock,
+                0x91 => .scroll,
+                0xa6 => .browser_back,
+                0xa7 => .browser_forward,
+                0xa8 => .browser_refresh,
+                0xa9 => .browser_stop,
+                0xaa => .browser_search,
+                0xab => .browser_favorites,
+                0xac => .browser_home,
+                0xad => .volume_mute,
+                0xae => .volume_down,
+                0xaf => .volume_up,
+                0xb0 => .media_next_track,
+                0xb1 => .media_prev_track,
+                0xb2 => .media_stop,
+                0xb3 => .media_play_pause,
+                0xb4 => .launch_mail,
+                0xb5 => .launch_media_select,
+                0xb6 => .launch_app1,
+                0xb7 => .launch_app2,
+                0xdf => .oem_8,
+                0xe2 => .oem_102,
+                0xe5 => .processkey,
+                0xe7 => .packet,
+                0xf6 => .attn,
+                0xf7 => .crsel,
+                0xf8 => .exsel,
+                0xf9 => .ereof,
+                0xfa => .play,
+                0xfb => .zoom,
+                0xfc => .noname,
+                0xfd => .pa1,
+                0xFE => .oem_clear,
+                else => null,
+            };
+        }
+    },
+    else => |tag| @compileError("Unsupported operating system: " ++ @tagName(tag)),
 };

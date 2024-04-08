@@ -21,6 +21,7 @@ const root = @import("../root.zig");
 const events = @import("../events.zig");
 const input = @import("../input.zig");
 const cursor = @import("../cursor.zig");
+const icon = @import("../icon.zig");
 const window = @import("../window.zig");
 const util = @import("../util.zig");
 
@@ -32,11 +33,10 @@ const EventLoop = events.EventLoop;
 const KeyEvent = events.KeyEvent;
 const ButtonState = events.ButtonState;
 
-const KeyCode = input.KeyCode;
 const MouseButton = input.MouseButton;
 
-const CursorIcon = cursor.CursorIcon;
-const Cursor = cursor.Cursor;
+const CursorOption = cursor.CursorOption;
+const IconOption = icon.IconOption;
 
 const Error = window.Error;
 const CreateOptions = window.CreateOptions;
@@ -44,16 +44,20 @@ const ShowState = window.ShowState;
 
 const Window = @This();
 
-const IDI_APPLICATION = util.makeIntResourceA(32512);
+const IDI_APPLICATION = util.makeIntResourceW(32512);
 
-title: [:0]const u8,
-class: [:0]const u8,
+title: [:0]const u16,
+class: [:0]const u16,
 
-icon: ?[:0]const u8,
+icon: union(enum) {
+    icon: IconOption,
+    custom: [:0]const u16,
+},
+
 cursor: union(enum) {
-    icon: CursorIcon,
+    icon: CursorOption,
     custom: struct {
-        path: [:0]const u8,
+        path: [:0]const u16,
         width: i32,
         height: i32,
     },
@@ -65,15 +69,26 @@ event_loop: *EventLoop,
 
 pub const Target = @This();
 
+pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const title = std.unicode.utf16LeToUtf8Alloc(allocator, value.title);
+    const class = std.unicode.utf16LeToUtf8Alloc(allocator, value.class);
+
+    return writer.print("Window { title: '{s}', class: '{s}' }", .{ title, class });
+}
+
 fn keyEvent(wparam: usize, lparam: isize, state: ButtonState) KeyEvent {
     const hiword: usize = @intCast(lparam >> 16);
-    const key: KeyCode = @enumFromInt(wparam);
+    const key: input.VirtualKey = @enumFromInt(wparam);
 
     return .{
         .state = state,
         .virtual = wparam,
         .scan = @truncate(hiword),
-        .key = key,
+        .key = .{ .virtual = key },
         .alt = if (key == .menu) false else ((lparam >> 16) & KF_ALTDOWN) == KF_ALTDOWN,
     };
 }
@@ -107,11 +122,11 @@ fn wndProc(
             // Cast pointer to isize for setting data
             const long_ptr: usize = @intFromPtr(event_loop);
             const ptr: isize = @intCast(long_ptr);
-            _ = windows_and_messaging.SetWindowLongPtrA(hwnd, windows_and_messaging.GWLP_USERDATA, ptr);
+            _ = windows_and_messaging.SetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA, ptr);
         }
     } else {
         // Get window state/data pointer
-        const ptr = windows_and_messaging.GetWindowLongPtrA(hwnd, windows_and_messaging.GWLP_USERDATA);
+        const ptr = windows_and_messaging.GetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA);
         // Cast int to optional EventLoop pointer
         const lptr: usize = @intCast(ptr);
         const win: ?*Window = @ptrFromInt(lptr);
@@ -126,52 +141,39 @@ fn wndProc(
                 },
                 // Keyboard input evenets
                 windows_and_messaging.WM_SYSKEYDOWN => {
-                    if (keyDownEvent(wparam, lparam)) |ev| {
-                        el.handle_event(
-                            ev,
-                            target,
-                        );
-                    }
-                    return windows_and_messaging.DefWindowProcA(hwnd, uMsg, wparam, lparam);
+                    // TODO:
+                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 windows_and_messaging.WM_SYSKEYUP => {
-                    el.handle_event(
-                        Event{ .key_input = keyEvent(wparam, lparam, .released) },
-                        target,
-                    );
-                    return windows_and_messaging.DefWindowProcA(hwnd, uMsg, wparam, lparam);
+                    // TODO:
+                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 windows_and_messaging.WM_CHAR => {
                     // Todo: figure out how to handle ctrl+{key} events
+                    // Todo: depending on keyboard state the key maps to specific keys
                     // on windows these tend to translate directly to emoji
                     const char: u8 = @truncate(wparam);
                     std.log.debug("CHAR: {c}", .{char});
                 },
-                windows_and_messaging.WM_KEYDOWN => if (keyDownEvent(wparam, lparam)) |ev| {
-                    const char = keyboard_and_mouse.MapVirtualKeyA(
-                        @intCast(wparam),
-                        windows_and_messaging.MAPVK_VK_TO_CHAR,
-                    );
-                    if (char > 0) {
-                        if (char & 1 << 31 == 1 << 31) {
-                            std.log.debug("CHARD: {c}", .{@as(u8, @truncate(char))});
-                        } else {
-                            std.log.debug("DEADCHAR: {c}", .{@as(u8, @truncate(char))});
-                        }
-                    } else {}
+                windows_and_messaging.WM_KEYDOWN => {
+                    // TODO:
+                    if (input.parseVirtualKey(wparam, lparam)) |key| {
+                        el.handle_event(
+                            Event{
+                                .key_input = .{
+                                    .key = .{ .virtual = key },
+                                    .state = .pressed,
+                                },
+                            },
+                            target,
+                        );
+                    }
 
-                    el.handle_event(
-                        ev,
-                        target,
-                    );
-                    return windows_and_messaging.DefWindowProcA(hwnd, uMsg, wparam, lparam);
+                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 windows_and_messaging.WM_KEYUP => {
-                    el.handle_event(
-                        Event{ .key_input = keyEvent(wparam, lparam, .released) },
-                        target,
-                    );
-                    return windows_and_messaging.DefWindowProcA(hwnd, uMsg, wparam, lparam);
+                    // TODO:
+                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 // MouseMove event
                 windows_and_messaging.WM_MOUSEMOVE => {
@@ -259,14 +261,14 @@ fn wndProc(
                         target,
                     );
                 },
-                else => return windows_and_messaging.DefWindowProcA(hwnd, uMsg, wparam, lparam),
+                else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
             }
         } else {
             switch (uMsg) {
                 windows_and_messaging.WM_DESTROY => {
                     windows_and_messaging.PostQuitMessage(0);
                 },
-                else => return windows_and_messaging.DefWindowProcA(hwnd, uMsg, wparam, lparam),
+                else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
             }
         }
     }
@@ -286,67 +288,60 @@ pub fn init(
     event_loop: *EventLoop,
     options: CreateOptions,
 ) Error!*Window {
-    const title: [:0]u8 = try allocator.allocSentinel(u8, options.title.len, 0);
-    errdefer allocator.free(title);
-    @memcpy(title, options.title);
-
     event_loop.increment();
 
-    const class = try createUIDClass(allocator);
-    errdefer allocator.free(class);
-
     var win = try allocator.create(Window);
-    errdefer allocator.destroy(win);
+    errdefer win.deinit();
 
     win.* = .{
-        .title = title,
-        .class = class,
-        .icon = null,
-        .cursor = .{ .icon = .Default },
+        .title = try utf8ToUtf16Alloc(allocator, options.title),
+        .class = try createUIDClass(allocator),
+        .icon = .{ .icon = .default },
+        .cursor = .{ .icon = .default },
         .handle = null,
         .allocator = allocator,
         .event_loop = event_loop,
     };
 
-    if (options.icon) |icon| {
-        const temp = std.fs.cwd().realpathAlloc(allocator, icon) catch |err| switch (err) {
-            error.FileNotFound => return error.FileNotFound,
-            error.OutOfMemory => return error.OutOfMemory,
-            else => return error.InvalidUtf8,
-        };
+    switch (options.icon) {
+        .icon => |i| win.icon = .{ .icon = i },
+        .custom => |custom| {
+            const temp = std.fs.cwd().realpathAlloc(allocator, custom) catch |err| switch (err) {
+                error.FileNotFound => return error.FileNotFound,
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return error.InvalidUtf8,
+            };
+            defer allocator.free(temp);
 
-        // Move the icon path into a null terminated string
-        errdefer allocator.free(temp);
-        const path = try allocator.allocSentinel(u8, temp.len, 0);
-        @memcpy(path, temp);
-        win.icon = path;
-        allocator.free(temp);
+            // Move the cursor path into a null terminated utf16 string
+            win.icon = .{
+                .custom = try utf8ToUtf16Alloc(allocator, temp),
+            };
+        },
     }
-    errdefer if (win.icon) |icon| {
-        allocator.free(icon);
+    errdefer switch (win.icon) {
+        .custom => |custom| allocator.free(custom),
+        else => {},
     };
 
     switch (options.cursor) {
-        .icon => |icon| win.cursor = .{ .icon = icon },
+        .icon => |i| win.cursor = .{ .icon = i },
         .custom => |custom| {
             const temp = std.fs.cwd().realpathAlloc(allocator, custom.path) catch |err| switch (err) {
                 error.FileNotFound => return error.FileNotFound,
                 error.OutOfMemory => return error.OutOfMemory,
                 else => return error.InvalidUtf8,
             };
-            errdefer allocator.free(temp);
+            defer allocator.free(temp);
 
-            // Move the cursor path into a null terminated string
-            const path = try allocator.allocSentinel(u8, temp.len, 0);
-            @memcpy(path, temp);
+            // Move the cursor path into a null terminated utf16 string
             win.cursor = .{
                 .custom = .{
-                    .path = path,
+                    .path = try utf8ToUtf16Alloc(allocator, temp),
                     .width = custom.width,
                     .height = custom.height,
                 },
             };
-            allocator.free(temp);
         },
     }
     errdefer switch (win.cursor) {
@@ -355,29 +350,32 @@ pub fn init(
     };
 
     const instance = library_loader.GetModuleHandleW(null);
-    const wnd_class = windows_and_messaging.WNDCLASSA{
-        .lpszClassName = class.ptr,
+    const wnd_class = windows_and_messaging.WNDCLASSW{
+        .lpszClassName = win.class.ptr,
 
         .style = windows_and_messaging.WNDCLASS_STYLES{ .HREDRAW = 1, .VREDRAW = 1 },
         .cbClsExtra = 0,
         .cbWndExtra = 0,
 
-        .hIcon = if (win.icon) |icon| @ptrCast(windows_and_messaging.LoadImageA(
-            null,
-            icon.ptr,
-            windows_and_messaging.IMAGE_ICON,
-            0,
-            0,
-            windows_and_messaging.IMAGE_FLAGS{
-                .DEFAULTSIZE = 1,
-                .LOADFROMFILE = 1,
-                .SHARED = 1,
-                .LOADTRANSPARENT = 1,
-            },
-        )) else windows_and_messaging.LoadIconA(null, IDI_APPLICATION),
+        .hIcon = switch (win.icon) {
+            .icon => |i| LoadIconW(null, icon.iconToResource(i)),
+            .custom => |custom| @ptrCast(windows_and_messaging.LoadImageW(
+                null,
+                custom.ptr,
+                windows_and_messaging.IMAGE_ICON,
+                0,
+                0,
+                windows_and_messaging.IMAGE_FLAGS{
+                    .DEFAULTSIZE = 1,
+                    .LOADFROMFILE = 1,
+                    .SHARED = 1,
+                    .LOADTRANSPARENT = 1,
+                },
+            )),
+        },
         .hCursor = switch (win.cursor) {
-            .icon => |icon| windows_and_messaging.LoadCursorA(null, cursor.resource(icon)),
-            .custom => |custom| @ptrCast(windows_and_messaging.LoadImageA(
+            .icon => |i| LoadCursorW(null, cursor.cursorToResource(i)),
+            .custom => |custom| @ptrCast(windows_and_messaging.LoadImageW(
                 null,
                 custom.path.ptr,
                 windows_and_messaging.IMAGE_CURSOR,
@@ -397,7 +395,7 @@ pub fn init(
         .hInstance = instance,
         .lpfnWndProc = wndProc,
     };
-    const result = windows_and_messaging.RegisterClassA(&wnd_class);
+    const result = windows_and_messaging.RegisterClassW(&wnd_class);
 
     if (result == 0) {
         return error.SystemCreateWindow;
@@ -415,10 +413,10 @@ pub fn init(
         .MAXIMIZE = @intFromBool(options.state == .maximize),
     };
 
-    const handle = windows_and_messaging.CreateWindowExA(
+    const handle = windows_and_messaging.CreateWindowExW(
         windows_and_messaging.WINDOW_EX_STYLE{},
-        class.ptr, // Class name
-        title.ptr, // Window name
+        win.class.ptr, // Class name
+        win.title.ptr, // Window name
         window_style, // style
         if (options.x) |x| x else windows_and_messaging.CW_USEDEFAULT,
         if (options.y) |y| y else windows_and_messaging.CW_USEDEFAULT, // initial position
@@ -520,8 +518,9 @@ fn showWindow(handle: ?foundation.HWND, state: ShowState) void {
 pub fn deinit(self: *Window) void {
     self.allocator.free(self.class);
     self.allocator.free(self.title);
-    if (self.icon) |icon| {
-        self.allocator.free(icon);
+    switch (self.icon) {
+        .custom => |custom| self.allocator.free(custom),
+        else => {},
     }
     switch (self.cursor) {
         .custom => |custom| self.allocator.free(custom.path),
@@ -530,14 +529,40 @@ pub fn deinit(self: *Window) void {
     self.allocator.destroy(self);
 }
 
+// --- Helpers and Utility ---
+
 /// Create/Allocate a unique window class with a uuid v4 prefixed with `ZNWL-`
-fn createUIDClass(allocator: std.mem.Allocator) AllocError![:0]u8 {
+fn createUIDClass(allocator: std.mem.Allocator) Error![:0]u16 {
     // Size of ZNWL-{3}-{36}{null} == 46
-    var class = try std.ArrayList(u8).initCapacity(allocator, 46);
-    defer class.deinit();
+    var buffer = try std.ArrayList(u8).initCapacity(allocator, 45);
+    defer buffer.deinit();
 
     const uuid = UUID.init();
-    try std.fmt.format(class.writer(), "ZNWL-FUL-{s}", .{uuid});
+    try std.fmt.format(buffer.writer(), "ZNWL-FUL-{s}", .{uuid});
 
-    return try class.toOwnedSliceSentinel(0);
+    const temp = try buffer.toOwnedSlice();
+    defer allocator.free(temp);
+
+    return try utf8ToUtf16Alloc(allocator, temp);
 }
+
+/// Allocate a sentinal utf16 string from a utf8 string
+fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) Error![:0]u16 {
+    const len: usize = unicode.calcUtf16LeLen(data) catch unreachable;
+    var utf16le: [:0]u16 = try allocator.allocSentinel(u16, len, 0);
+    const utf16le_len = try unicode.utf8ToUtf16Le(utf16le[0..], data[0..]);
+    assert(len == utf16le_len);
+    return utf16le;
+}
+
+// Todo: remove when zigwin32 supports union_pointer param for these methods
+//   and there corresponding constant params
+pub extern "user32" fn LoadCursorW(
+    hInstance: ?foundation.HINSTANCE,
+    lpCursorName: ?[*:0]align(1) const u16,
+) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HCURSOR;
+
+pub extern "user32" fn LoadIconW(
+    hInstance: ?foundation.HINSTANCE,
+    lpIconName: ?[*:0]align(1) const u16,
+) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HICON;

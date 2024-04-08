@@ -5,7 +5,7 @@ const zig = @import("win32").zig;
 const windows_and_messaging = @import("win32").ui.windows_and_messaging;
 
 const Window = @import("window.zig");
-const KeyCode = @import("input.zig").KeyCode;
+const Key = @import("input.zig").Key;
 const MouseButton = @import("input.zig").MouseButton;
 const Position = @import("root.zig").Position;
 const Target = Window.Target;
@@ -13,14 +13,12 @@ const Target = Window.Target;
 pub const KeyEvent = struct {
     /// Current button state, i.e. pressed or released
     state: ButtonState,
-    /// Whether the alt key is pressed
-    alt: bool = false,
     /// Virtual key code
-    virtual: usize,
+    virtual: usize = 0,
     /// Scan code
-    scan: u8,
+    scan: u8 = 0,
     /// Key enum representation
-    key: KeyCode,
+    key: Key,
 };
 
 pub const ButtonState = enum {
@@ -115,9 +113,9 @@ pub const EventLoop = struct {
         switch (builtin.target.os.tag) {
             .windows => {
                 var message: windows_and_messaging.MSG = undefined;
-                while (self.windowCount > 0 and windows_and_messaging.GetMessageA(&message, null, 0, 0) == zig.TRUE) {
+                while (self.windowCount > 0 and windows_and_messaging.GetMessageW(&message, null, 0, 0) == zig.TRUE) {
                     _ = windows_and_messaging.TranslateMessage(&message);
-                    _ = windows_and_messaging.DispatchMessageA(&message);
+                    _ = windows_and_messaging.DispatchMessageW(&message);
                 }
             },
             else => {},
