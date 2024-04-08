@@ -24,19 +24,22 @@ const State = struct {
             },
             .key_input => |ke| {
                 switch (ke.key) {
-                    .shift => state.shift = (ke.state == .pressed),
-                    .control => state.ctrl = (ke.state == .pressed),
-                    .menu => state.alt = (ke.state == .pressed),
+                    .virtual => |virtual| switch (virtual) {
+                        .shift => state.shift = (ke.state == .pressed),
+                        .control => state.ctrl = (ke.state == .pressed),
+                        .alt => state.alt = (ke.state == .pressed),
+                        .escape => if (ke.state == .pressed) target.close(),
+                        else => {},
+                    },
                     // Exit after pressing the escape key
-                    .escape => if (ke.state == .pressed) target.close(),
-                    else => {
+                    .char => |char| {
                         if (ke.state == .pressed) {
-                            std.log.debug("[ {s} ] {s}{s}{s}{s}", .{
+                            std.log.debug("[ {s} ] {s}{s}{s}{c}", .{
                                 if (ke.state == .pressed) "PRESSED" else "RELEASED",
                                 if (state.ctrl) "ctrl+" else "",
                                 if (state.alt) "alt+" else "",
                                 if (state.shift) "shift+" else "",
-                                @tagName(ke.key),
+                                char,
                             });
                         }
                     },
@@ -103,11 +106,13 @@ pub fn main() !void {
             .title = "Zig window",
             .width = 300,
             .height = 400,
-            .icon = "assets\\icon.ico",
-            .cursor = .{ .icon = .Pointer },
+            .icon = .{ .custom = "assets\\icon.ico" },
+            .cursor = .{ .icon = .pointer },
         },
     );
     defer win.deinit();
+
+    // std.log.debug("{any}", .{win});
 
     event_loop.run();
 }

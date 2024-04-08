@@ -19,6 +19,7 @@
 /// - menu
 const builtin = @import("builtin");
 const Cursor = @import("cursor.zig").Cursor;
+const Icon = @import("icon.zig").Icon;
 
 pub const Error = error{ InvalidUtf8, OutOfMemory, FileNotFound, SystemCreateWindow };
 
@@ -63,8 +64,8 @@ pub const CreateOptions = struct {
     /// Change whether the window can be resized
     resizable: bool = true,
 
-    icon: ?[]const u8 = null,
-    cursor: Cursor = .{ .icon = .Default },
+    icon: Icon = .{ .icon = .default },
+    cursor: Cursor = .{ .icon = .default },
 
     /// Set to dark or light theme. Or set to auto to match the system theme
     theme: Theme = .auto,
