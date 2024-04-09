@@ -112,6 +112,10 @@ pub fn main() !void {
     );
     defer win.deinit();
 
+    try win.setTitle("Something different");
+    try win.setCursor(.{ .icon = .default });
+    try win.setIcon(.{ .icon = .default });
+
     // std.log.debug("{any}", .{win});
 
     event_loop.run();
