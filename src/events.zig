@@ -96,13 +96,13 @@ pub const EventLoop = struct {
         self.handler(self.state, event, target);
     }
 
-    pub fn decrement(self: *EventLoop) void {
+    pub fn deref(self: *EventLoop) void {
         self._mutex.lock();
         defer self._mutex.unlock();
         self.windowCount -= 1;
     }
 
-    pub fn increment(self: *EventLoop) void {
+    pub fn ref(self: *EventLoop) void {
         self._mutex.lock();
         defer self._mutex.unlock();
         self.windowCount += 1;

@@ -2,6 +2,7 @@ pub const uuid = @import("uuid.zig");
 pub const Window = @import("window.zig");
 pub const events = @import("events.zig");
 pub const input = @import("input.zig");
+pub const icon = @import("icon.zig");
 pub const cursor = @import("cursor.zig");
 
 pub fn Position(By: type) type {

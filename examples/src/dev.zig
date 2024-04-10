@@ -5,6 +5,8 @@ pub const znwl = @import("znwl");
 const Window = znwl.Window;
 const Target = Window.Target;
 const Event = znwl.events.Event;
+const icon = znwl.icon;
+const cursor = znwl.cursor;
 const EventLoop = znwl.events.EventLoop;
 
 const State = struct {
@@ -14,6 +16,49 @@ const State = struct {
 
     captured: bool = false,
     focused: bool = false,
+
+    cursor: enum { pointer, default } = .default,
+    icon: enum { default, security } = .default,
+    title: enum { first, second } = .first,
+
+    pub fn toggleCursor(self: *State) cursor.Cursor {
+        switch (self.cursor) {
+            .pointer => {
+                self.cursor = .default;
+                return .{ .icon = .default };
+            },
+            .default => {
+                self.cursor = .pointer;
+                return .{ .icon = .pointer };
+            },
+        }
+    }
+
+    pub fn toggleIcon(self: *State) icon.Icon {
+        switch (self.icon) {
+            .security => {
+                self.icon = .default;
+                return .{ .icon = .default };
+            },
+            .default => {
+                self.icon = .security;
+                return .{ .icon = .security };
+            },
+        }
+    }
+
+    pub fn toggleTitle(self: *State) []const u8 {
+        switch (self.title) {
+            .first => {
+                self.title = .second;
+                return "second";
+            },
+            .second => {
+                self.title = .first;
+                return "first";
+            },
+        }
+    }
 
     pub fn handler(self: *anyopaque, event: Event, target: *Target) void {
         var state: *State = @ptrCast(@alignCast(self));
@@ -29,6 +74,11 @@ const State = struct {
                         .control => state.ctrl = (ke.state == .pressed),
                         .alt => state.alt = (ke.state == .pressed),
                         .escape => if (ke.state == .pressed) target.close(),
+                        .tab => {
+                            target.setIcon(state.toggleIcon()) catch unreachable;
+                            target.setCursor(state.toggleCursor()) catch unreachable;
+                            target.setTitle(state.toggleTitle()) catch unreachable;
+                        },
                         else => {},
                     },
                     // Exit after pressing the escape key
@@ -112,11 +162,10 @@ pub fn main() !void {
     );
     defer win.deinit();
 
-    try win.setTitle("Something different");
-    try win.setCursor(.{ .icon = .default });
-    try win.setIcon(.{ .icon = .default });
-
-    // std.log.debug("{any}", .{win});
+    // Custom debug output of window
+    std.debug.print("Press <TAB> to toggle icon, cursor, and title at runtime\n", .{});
+    std.debug.print("\x1b[1;33mWARNING\x1b[39m:\x1b[22m There are a lot of debug log statements \n\n", .{});
+    std.log.debug("{any}", .{win});
 
     event_loop.run();
 }

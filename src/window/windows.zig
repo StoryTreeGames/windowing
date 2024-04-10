@@ -36,7 +36,9 @@ const ButtonState = events.ButtonState;
 const MouseButton = input.MouseButton;
 
 const CursorOption = cursor.CursorOption;
+const Cursor = cursor.Cursor;
 const IconOption = icon.IconOption;
+const Icon = icon.Icon;
 
 const Error = window.Error;
 const CreateOptions = window.CreateOptions;
@@ -74,10 +76,10 @@ pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, 
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const title = std.unicode.utf16LeToUtf8Alloc(allocator, value.title);
-    const class = std.unicode.utf16LeToUtf8Alloc(allocator, value.class);
+    const class = try std.unicode.utf16LeToUtf8Alloc(allocator, value.class);
+    const title = try std.unicode.utf16LeToUtf8Alloc(allocator, value.title);
 
-    return writer.print("Window { title: '{s}', class: '{s}' }", .{ title, class });
+    return writer.print("Window {{ title: '{s}', class: '{s}' }}", .{ title, class });
 }
 
 fn keyEvent(wparam: usize, lparam: isize, state: ButtonState) KeyEvent {
@@ -101,6 +103,44 @@ fn keyDownEvent(wparam: usize, lparam: isize) ?Event {
         return Event{ .key_input = keyEvent(wparam, lparam, .pressed) };
     }
     return null;
+}
+
+fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
+    return switch (self.cursor) {
+        .icon => |i| LoadCursorW(null, cursor.cursorToResource(i)),
+        .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
+            null,
+            c.path.ptr,
+            windows_and_messaging.IMAGE_ICON,
+            c.width,
+            c.height,
+            windows_and_messaging.IMAGE_FLAGS{
+                .DEFAULTSIZE = 1,
+                .LOADFROMFILE = 1,
+                .SHARED = 1,
+                .LOADTRANSPARENT = 1,
+            },
+        )),
+    };
+}
+
+fn getHIcon(self: *Window) ?windows_and_messaging.HICON {
+    return switch (self.icon) {
+        .icon => |i| LoadIconW(null, icon.iconToResource(i)),
+        .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
+            null,
+            c.ptr,
+            windows_and_messaging.IMAGE_ICON,
+            0,
+            0,
+            windows_and_messaging.IMAGE_FLAGS{
+                .DEFAULTSIZE = 1,
+                .LOADFROMFILE = 1,
+                .SHARED = 1,
+                .LOADTRANSPARENT = 1,
+            },
+        )),
+    };
 }
 
 fn wndProc(
@@ -138,6 +178,10 @@ fn wndProc(
                 // Request to close the window
                 windows_and_messaging.WM_CLOSE => {
                     el.handle_event(Event.close, target);
+                },
+                windows_and_messaging.WM_SETCURSOR => {
+                    // Get HCURSOR pointer from icon
+                    _ = windows_and_messaging.SetCursor(target.getHCursor());
                 },
                 // Keyboard input evenets
                 windows_and_messaging.WM_SYSKEYDOWN => {
@@ -288,7 +332,7 @@ pub fn init(
     event_loop: *EventLoop,
     options: CreateOptions,
 ) Error!*Window {
-    event_loop.increment();
+    event_loop.ref();
 
     var win = try allocator.create(Window);
     errdefer win.deinit();
@@ -357,38 +401,8 @@ pub fn init(
         .cbClsExtra = 0,
         .cbWndExtra = 0,
 
-        .hIcon = switch (win.icon) {
-            .icon => |i| LoadIconW(null, icon.iconToResource(i)),
-            .custom => |custom| @ptrCast(windows_and_messaging.LoadImageW(
-                null,
-                custom.ptr,
-                windows_and_messaging.IMAGE_ICON,
-                0,
-                0,
-                windows_and_messaging.IMAGE_FLAGS{
-                    .DEFAULTSIZE = 1,
-                    .LOADFROMFILE = 1,
-                    .SHARED = 1,
-                    .LOADTRANSPARENT = 1,
-                },
-            )),
-        },
-        .hCursor = switch (win.cursor) {
-            .icon => |i| LoadCursorW(null, cursor.cursorToResource(i)),
-            .custom => |custom| @ptrCast(windows_and_messaging.LoadImageW(
-                null,
-                custom.path.ptr,
-                windows_and_messaging.IMAGE_CURSOR,
-                custom.width,
-                custom.height,
-                windows_and_messaging.IMAGE_FLAGS{
-                    .DEFAULTSIZE = 1,
-                    .LOADFROMFILE = 1,
-                    .SHARED = 1,
-                    .LOADTRANSPARENT = 1,
-                },
-            )),
-        },
+        .hIcon = win.getHIcon(),
+        .hCursor = win.getHCursor(),
         .hbrBackground = gdi.GetStockObject(gdi.WHITE_BRUSH),
         .lpszMenuName = null,
 
@@ -450,7 +464,7 @@ pub fn init(
 /// Close the current window
 pub fn close(self: Window) void {
     _ = windows_and_messaging.DestroyWindow(self.handle);
-    self.event_loop.decrement();
+    self.event_loop.deref();
 }
 
 /// Minimize the window
@@ -479,6 +493,79 @@ pub fn getRect(self: Window) root.Rect(i32) {
         .top = rect.top,
         .bottom = rect.bottom,
     };
+}
+
+/// Set window title
+pub fn setTitle(self: *Window, title: []const u8) !void {
+    self.allocator.free(self.title);
+    self.title = try utf8ToUtf16Alloc(self.allocator, title);
+    _ = windows_and_messaging.SetWindowTextW(self.handle, self.title);
+}
+
+/// Set window icon
+pub fn setIcon(self: *Window, new_icon: Icon) !void {
+    // Free old icon memory
+    switch (self.icon) {
+        .custom => |custom| self.allocator.free(custom),
+        else => {},
+    }
+
+    // Assign new icon value/memory
+    switch (new_icon) {
+        .icon => |i| self.icon = .{ .icon = i },
+        .custom => |c| {
+            self.icon = .{ .custom = try utf8ToUtf16Alloc(self.allocator, c) };
+        },
+    }
+
+    const hIcon: usize = @intFromPtr(self.getHIcon());
+
+    // Send message to window to now render new icon
+    _ = windows_and_messaging.SendMessageW(
+        self.handle,
+        windows_and_messaging.WM_SETICON,
+        windows_and_messaging.ICON_SMALL,
+        @intCast(hIcon),
+    );
+    _ = windows_and_messaging.SendMessageW(
+        self.handle,
+        windows_and_messaging.WM_SETICON,
+        windows_and_messaging.ICON_BIG,
+        @intCast(hIcon),
+    );
+}
+
+/// Set window cursor
+pub fn setCursor(self: *Window, new_cursor: Cursor) !void {
+    // Free old cursor memory
+    switch (self.cursor) {
+        .custom => |c| self.allocator.free(c.path),
+        else => {},
+    }
+
+    // Assign new cursor value/memory
+    switch (new_cursor) {
+        .icon => |i| self.cursor = .{ .icon = i },
+        .custom => |c| {
+            self.cursor = .{
+                .custom = .{
+                    .path = try utf8ToUtf16Alloc(self.allocator, c.path),
+                    .width = c.width,
+                    .height = c.height,
+                },
+            };
+        },
+    }
+
+    // If the mouse is focused on the current window
+    // update the cursor to the new value
+    const currHandle = windows_and_messaging.GetForegroundWindow();
+    if (currHandle) |handle| {
+        if (handle == self.handle) {
+            // Get HCURSOR pointer from icon
+            _ = windows_and_messaging.SetCursor(self.getHCursor());
+        }
+    }
 }
 
 /// Set the cursors position relative to the window
