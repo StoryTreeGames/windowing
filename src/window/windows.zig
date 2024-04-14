@@ -107,7 +107,7 @@ fn keyDownEvent(wparam: usize, lparam: isize) ?Event {
 
 fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
     return switch (self.cursor) {
-        .icon => |i| LoadCursorW(null, cursor.cursorToResource(i)),
+        .icon => |i| windows_and_messaging.LoadCursorW(null, cursor.cursorToResource(i)),
         .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
             null,
             c.path.ptr,
@@ -126,7 +126,7 @@ fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
 
 fn getHIcon(self: *Window) ?windows_and_messaging.HICON {
     return switch (self.icon) {
-        .icon => |i| LoadIconW(null, icon.iconToResource(i)),
+        .icon => |i| windows_and_messaging.LoadIconW(null, icon.iconToResource(i)),
         .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
             null,
             c.ptr,
@@ -180,8 +180,10 @@ fn wndProc(
                     el.handle_event(Event.close, target);
                 },
                 windows_and_messaging.WM_SETCURSOR => {
-                    // Get HCURSOR pointer from icon
+                    // Set user defined cursor
                     _ = windows_and_messaging.SetCursor(target.getHCursor());
+                    // Allow for resize cursor to be drawn if cursor is at correct position
+                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 // Keyboard input evenets
                 windows_and_messaging.WM_SYSKEYDOWN => {
@@ -588,6 +590,7 @@ pub fn setCapture(self: Window, state: bool) void {
 }
 
 fn showWindow(handle: ?foundation.HWND, state: ShowState) void {
+    std.log.debug("{any}", .{state});
     if (handle) |hwnd| {
         _ = windows_and_messaging.ShowWindow(hwnd, switch (state) {
             .maximize => windows_and_messaging.SW_SHOWMAXIMIZED,
@@ -644,12 +647,12 @@ fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) Error![:0]u1
 
 // Todo: remove when zigwin32 supports union_pointer param for these methods
 //   and there corresponding constant params
-pub extern "user32" fn LoadCursorW(
-    hInstance: ?foundation.HINSTANCE,
-    lpCursorName: ?[*:0]align(1) const u16,
-) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HCURSOR;
+// pub extern "user32" fn LoadCursorW(
+//     hInstance: ?foundation.HINSTANCE,
+//     lpCursorName: ?[*:0]align(1) const u16,
+// ) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HCURSOR;
 
-pub extern "user32" fn LoadIconW(
-    hInstance: ?foundation.HINSTANCE,
-    lpIconName: ?[*:0]align(1) const u16,
-) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HICON;
+// pub extern "user32" fn LoadIconW(
+//     hInstance: ?foundation.HINSTANCE,
+//     lpIconName: ?[*:0]align(1) const u16,
+// ) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HICON;

@@ -79,6 +79,9 @@ const State = struct {
                             target.setCursor(state.toggleCursor()) catch unreachable;
                             target.setTitle(state.toggleTitle()) catch unreachable;
                         },
+                        .down => target.minimize(),
+                        .up => target.restore(),
+                        .right => target.maximize(),
                         else => {},
                     },
                     // Exit after pressing the escape key

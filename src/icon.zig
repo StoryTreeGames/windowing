@@ -14,22 +14,22 @@ pub const IconOption = enum {
 
 pub usingnamespace switch (@import("builtin").target.os.tag) {
     .windows => struct {
+        const wam = @import("win32").ui.windows_and_messaging;
         const makeResourceW = @import("util.zig").makeIntResourceW;
-        const Application = makeResourceW(32512);
-        const Error = makeResourceW(32513);
-        const Question = makeResourceW(32514);
-        const Warning = makeResourceW(32515);
-        const Information = makeResourceW(32516);
-        const Shield = makeResourceW(32518);
+
+        const IDI_ERROR = makeResourceW(32513);
+        const IDI_WARNING = makeResourceW(32515);
+        const IDI_INFORMATION = makeResourceW(32516);
 
         pub fn iconToResource(icon: IconOption) [*:0]align(1) const u16 {
+            @import("std").debug.print("{any}", .{wam.IDI_APPLICATION});
             return switch (icon) {
-                .default => Application,
-                .@"error" => Error,
-                .question => Question,
-                .warning => Warning,
-                .information => Information,
-                .security => Shield,
+                .default => wam.IDI_APPLICATION,
+                .@"error" => IDI_ERROR,
+                .question => wam.IDI_QUESTION,
+                .warning => IDI_WARNING,
+                .information => IDI_INFORMATION,
+                .security => wam.IDI_SHIELD,
             };
         }
     },

@@ -103,10 +103,8 @@ pub const VirtualKey = enum(u32) {
     delete,
     /// help key
     help,
-    /// left windows key
-    lsuper,
-    /// right windows key
-    rsuper,
+    /// windows key
+    super,
     /// applications key
     apps,
     /// computer sleep key
@@ -312,8 +310,7 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
                 0x2d => .insert,
                 0x2e => .delete,
                 0x2f => .help,
-                0x5b => .lsuper,
-                0x5c => .rsuper,
+                0x5b, 0x5c => .super,
                 0x5d => .apps,
                 0x5f => .sleep,
                 0x60 => .numpad0,

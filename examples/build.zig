@@ -19,7 +19,7 @@ fn fetch_latest_commit(allocator: std.mem.Allocator, url: []const u8) ![]u8 {
     var req = try client.open(http.Method.GET, uri, options);
     defer req.deinit();
 
-    try req.send(.{});
+    try req.send();
     try req.wait();
 
     // Temp buffer to interatively fetch response body from
@@ -59,7 +59,7 @@ fn fetch_file(url: []const u8, dest: []const u8) !void {
     var req = try client.open(http.Method.GET, uri, options);
     defer req.deinit();
 
-    try req.send(.{});
+    try req.send();
     try req.wait();
 
     // Temp buffer to interatively fetch response body from
@@ -178,12 +178,12 @@ pub fn build(b: *std.Build) void {
 
     // Add vulkan-zig dependency
     // TODO: Show off a vulkan instance binding to a window and rendering a triangle
-    exe.root_module.addImport(
-        "vulkan",
-        b.dependency("vulkan_zig", .{
-            .registry = @as([]const u8, b.pathFromRoot(".cache/vk.xml")),
-        }).module("vulkan-zig"),
-    );
+    // exe.root_module.addImport(
+    //     "vulkan",
+    //     b.dependency("vulkan_zig", .{
+    //         .registry = @as([]const u8, b.pathFromRoot(".cache/vk.xml")),
+    //     }).module("vulkan-zig"),
+    // );
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

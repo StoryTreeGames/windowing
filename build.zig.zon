@@ -39,8 +39,9 @@
         //    .path = "foo",
         //},
         .zigwin32 = .{
-            .url = "https://github.com/marlersoft/zigwin32/archive/aec51b5b77764bd474a3a8e074d011492eb7e5ed.tar.gz",
-            .hash = "12207523d070abaf0b3a078c58c8afbc5445f21e5779b7e2745514e34e0f90f10652",
+            .url = "https://github.com/marlersoft/zigwin32/archive/254f14274941d4b5fbf34a56a9e2950ccf2ae1f3.tar.gz",
+            .hash = "1220cc84caf7afd287b70a628f130391f4b75b8c4f20ae2b04fe7932830a0d9e3f1f",
+            // .path = "../zigwin32gen/zigwin32",
         },
     },
 
