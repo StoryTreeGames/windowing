@@ -5,7 +5,7 @@
 
 pub const Key = union(enum) {
     virtual: VirtualKey,
-    char: [4:0]u8,
+    char: []u8,
 
     /// Character code points are u16 code points and there can potentially be 2
     /// unicode code points for a single character. This means there is a max

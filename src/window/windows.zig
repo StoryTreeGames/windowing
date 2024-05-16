@@ -82,29 +82,6 @@ pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, 
     return writer.print("Window {{ title: '{s}', class: '{s}' }}", .{ title, class });
 }
 
-fn keyEvent(wparam: usize, lparam: isize, state: ButtonState) KeyEvent {
-    const hiword: usize = @intCast(lparam >> 16);
-    const key: input.VirtualKey = @enumFromInt(wparam);
-
-    return .{
-        .state = state,
-        .virtual = wparam,
-        .scan = @truncate(hiword),
-        .key = .{ .virtual = key },
-        .alt = if (key == .menu) false else ((lparam >> 16) & KF_ALTDOWN) == KF_ALTDOWN,
-    };
-}
-
-fn keyDownEvent(wparam: usize, lparam: isize) ?Event {
-    const flags: usize = @intCast(lparam);
-    const repeat: bool = ((flags >> 16) & KF_REPEAT) == KF_REPEAT;
-
-    if (!repeat) {
-        return Event{ .key_input = keyEvent(wparam, lparam, .pressed) };
-    }
-    return null;
-}
-
 fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
     return switch (self.cursor) {
         .icon => |i| windows_and_messaging.LoadCursorW(null, cursor.cursorToResource(i)),
@@ -194,12 +171,84 @@ fn wndProc(
                     // TODO:
                     return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
-                windows_and_messaging.WM_CHAR => {
+                windows_and_messaging.WM_CHAR, windows_and_messaging.WM_SYSCHAR => {
                     // Todo: figure out how to handle ctrl+{key} events
                     // Todo: depending on keyboard state the key maps to specific keys
                     // on windows these tend to translate directly to emoji
-                    const char: u8 = @truncate(wparam);
-                    std.log.debug("CHAR: {c}", .{char});
+                    // https://github.com/rust-windowing/winit/blob/master/src/platform_impl/windows/keyboard.rs
+                    // line 120 to see how winit handles keyboard input.
+                    // Have to consider surrogates and combine multiple events. Will also have to resolve
+                    // based on keyboard state
+
+                    // const is_high_surrogate = wparam > 0xD800 and wparam <= 0xDBFF;
+                    // const is_low_surrogate = wparam > 0xDC00 and wparam <= 0xDFFF;
+                    const is_high_surrogate = std.unicode.utf16IsHighSurrogate(@truncate(wparam));
+                    const is_low_surrogate = std.unicode.utf16IsLowSurrogate(@truncate(wparam));
+
+                    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+                    defer arena.deinit();
+                    const allocator = arena.allocator();
+
+                    var utf16_chars = std.ArrayList(u16).init(allocator);
+                    defer utf16_chars.deinit();
+
+                    const is_utf16 = is_high_surrogate or is_low_surrogate;
+
+                    if (is_utf16) {
+                        utf16_chars.append(@truncate(wparam)) catch unreachable;
+                    } else {
+                        // TODO: u32 to u16 encoded
+                        utf16_chars.append(@truncate(wparam)) catch unreachable;
+                        const second: u16 = @truncate(wparam >> 16);
+                        if (second != 0) {
+                            utf16_chars.append(second) catch unreachable;
+                        }
+                    }
+
+                    // TODO: Check if more chars are coming in. If so then don't produce an event yet and save read chars for next char read.
+
+                    // TODO: Otherwise resolve character with keyboard state and ctrl key to produce final keyboard event
+
+                    const scan_code: u32 = @as(u32, @intCast(lparam >> 16)) & 0xFF;
+                    const virtual_key: u32 = keyboard_and_mouse.MapVirtualKeyW(scan_code, windows_and_messaging.MAPVK_VSC_TO_VK);
+
+                    var keyboard: [256]u8 = [_]u8{0} ** 256;
+                    getKeyboardState(&keyboard);
+
+                    var buffer: [3:0]u16 = [_:0]u16{0} ** 3;
+                    const result = keyboard_and_mouse.ToUnicode(
+                        virtual_key,
+                        scan_code,
+                        &keyboard,
+                        &buffer,
+                        3,
+                        // Set it to not modify keyboard state. Windows 1607 and above
+                        0,
+                    );
+
+                    // TODO: If dead key then store for later and combine with next char/key input
+
+                    if (result == 0) {
+                        std.log.debug("[{d}] ToUnicode failed", .{result});
+                    } else if (result < 0) {
+                        std.log.debug("[{d}] Dead key detected", .{result});
+                    } else {
+                        const data = unicode.utf16LeToUtf8Alloc(allocator, buffer[0..]) catch unreachable;
+                        defer allocator.free(data);
+                        if (data.len <= 4) {
+                            el.handle_event(
+                                Event{
+                                    .key_input = .{
+                                        .key = .{ .char = data[0..] },
+                                        .state = .pressed,
+                                        .scan = scan_code,
+                                        .virtual = virtual_key,
+                                    },
+                                },
+                                target,
+                            );
+                        }
+                    }
                 },
                 windows_and_messaging.WM_KEYDOWN => {
                     // TODO:
@@ -621,6 +670,10 @@ pub fn deinit(self: *Window) void {
 
 // --- Helpers and Utility ---
 
+fn getKeyboardState(keyboard: *[256]u8) void {
+    _ = keyboard_and_mouse.GetKeyboardState(keyboard);
+}
+
 /// Create/Allocate a unique window class with a uuid v4 prefixed with `ZNWL-`
 fn createUIDClass(allocator: std.mem.Allocator) Error![:0]u16 {
     // Size of ZNWL-{3}-{36}{null} == 46
@@ -644,15 +697,3 @@ fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) Error![:0]u1
     assert(len == utf16le_len);
     return utf16le;
 }
-
-// Todo: remove when zigwin32 supports union_pointer param for these methods
-//   and there corresponding constant params
-// pub extern "user32" fn LoadCursorW(
-//     hInstance: ?foundation.HINSTANCE,
-//     lpCursorName: ?[*:0]align(1) const u16,
-// ) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HCURSOR;
-
-// pub extern "user32" fn LoadIconW(
-//     hInstance: ?foundation.HINSTANCE,
-//     lpIconName: ?[*:0]align(1) const u16,
-// ) callconv(std.os.windows.WINAPI) ?windows_and_messaging.HICON;

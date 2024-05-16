@@ -14,9 +14,9 @@ pub const KeyEvent = struct {
     /// Current button state, i.e. pressed or released
     state: ButtonState,
     /// Virtual key code
-    virtual: usize = 0,
+    virtual: u32 = 0,
     /// Scan code
-    scan: u8 = 0,
+    scan: u32 = 0,
     /// Key enum representation
     key: Key,
 };

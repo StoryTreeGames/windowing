@@ -82,6 +82,7 @@ const State = struct {
                         .down => target.minimize(),
                         .up => target.restore(),
                         .right => target.maximize(),
+                        .f1 => std.log.debug("F1", .{}),
                         else => {},
                     },
                     // Exit after pressing the escape key
