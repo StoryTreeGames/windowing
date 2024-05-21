@@ -6,6 +6,9 @@ const windows_and_messaging = @import("win32").ui.windows_and_messaging;
 
 const Window = @import("window.zig");
 const Key = @import("input.zig").Key;
+const CTRL = @import("input.zig").CTRL;
+const ALT = @import("input.zig").ALT;
+const SHIFT = @import("input.zig").SHIFT;
 const MouseButton = @import("input.zig").MouseButton;
 const Position = @import("root.zig").Position;
 const Target = Window.Target;
@@ -13,12 +16,30 @@ const Target = Window.Target;
 pub const KeyEvent = struct {
     /// Current button state, i.e. pressed or released
     state: ButtonState,
+    /// Modifiers: ctrl, alt, shift, etc as bit flags
+    modifiers: u4,
     /// Virtual key code
     virtual: u32 = 0,
     /// Scan code
     scan: u32 = 0,
     /// Key enum representation
     key: Key,
+
+    pub fn isShift(self: *const KeyEvent) bool {
+        return self.modifiers & SHIFT == SHIFT;
+    }
+
+    pub fn isAlt(self: *const KeyEvent) bool {
+        return self.modifiers & ALT == ALT;
+    }
+
+    pub fn isCtrl(self: *const KeyEvent) bool {
+        return self.modifiers & CTRL == CTRL;
+    }
+
+    pub fn matches(self: *const KeyEvent, modifiers: u32, key: Key) bool {
+        return self.modifiers == modifiers and self.key == key;
+    }
 };
 
 pub const ButtonState = enum {

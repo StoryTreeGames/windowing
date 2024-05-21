@@ -9,10 +9,21 @@ const win32 = @import("win32");
 const foundation = win32.foundation;
 const windows_and_messaging = win32.ui.windows_and_messaging;
 const keyboard_and_mouse = win32.ui.input.keyboard_and_mouse;
+const VIRTUAL_KEY = keyboard_and_mouse.VIRTUAL_KEY;
 const library_loader = win32.system.library_loader;
 const gdi = win32.graphics.gdi;
 const dwm = win32.graphics.dwm;
 const zig = win32.zig;
+
+const VK_CONTROL = keyboard_and_mouse.VK_CONTROL;
+const VK_LCONTROL = keyboard_and_mouse.VK_LCONTROL;
+const VK_RCONTROL = keyboard_and_mouse.VK_RCONTROL;
+const VK_ALT = keyboard_and_mouse.VK_MENU;
+const VK_LALT = keyboard_and_mouse.VK_LMENU;
+const VK_RALT = keyboard_and_mouse.VK_RMENU;
+const VK_SHIFT = keyboard_and_mouse.VK_SHIFT;
+const VK_LSHIFT = keyboard_and_mouse.VK_LSHIFT;
+const VK_RSHIFT = keyboard_and_mouse.VK_RSHIFT;
 
 const KF_ALTDOWN = windows_and_messaging.KF_ALTDOWN;
 const KF_REPEAT = windows_and_messaging.KF_REPEAT;
@@ -163,57 +174,25 @@ fn wndProc(
                     return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 // Keyboard input evenets
-                windows_and_messaging.WM_SYSKEYDOWN => {
-                    // TODO:
-                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
-                },
-                windows_and_messaging.WM_SYSKEYUP => {
-                    // TODO:
-                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
-                },
                 windows_and_messaging.WM_CHAR, windows_and_messaging.WM_SYSCHAR => {
-                    // Todo: figure out how to handle ctrl+{key} events
-                    // Todo: depending on keyboard state the key maps to specific keys
-                    // on windows these tend to translate directly to emoji
-                    // https://github.com/rust-windowing/winit/blob/master/src/platform_impl/windows/keyboard.rs
-                    // line 120 to see how winit handles keyboard input.
-                    // Have to consider surrogates and combine multiple events. Will also have to resolve
-                    // based on keyboard state
-
-                    // const is_high_surrogate = wparam > 0xD800 and wparam <= 0xDBFF;
-                    // const is_low_surrogate = wparam > 0xDC00 and wparam <= 0xDFFF;
-                    const is_high_surrogate = std.unicode.utf16IsHighSurrogate(@truncate(wparam));
-                    const is_low_surrogate = std.unicode.utf16IsLowSurrogate(@truncate(wparam));
-
-                    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-                    defer arena.deinit();
-                    const allocator = arena.allocator();
-
-                    var utf16_chars = std.ArrayList(u16).init(allocator);
-                    defer utf16_chars.deinit();
-
-                    const is_utf16 = is_high_surrogate or is_low_surrogate;
-
-                    if (is_utf16) {
-                        utf16_chars.append(@truncate(wparam)) catch unreachable;
-                    } else {
-                        // TODO: u32 to u16 encoded
-                        utf16_chars.append(@truncate(wparam)) catch unreachable;
-                        const second: u16 = @truncate(wparam >> 16);
-                        if (second != 0) {
-                            utf16_chars.append(second) catch unreachable;
-                        }
-                    }
-
-                    // TODO: Check if more chars are coming in. If so then don't produce an event yet and save read chars for next char read.
-
-                    // TODO: Otherwise resolve character with keyboard state and ctrl key to produce final keyboard event
-
                     const scan_code: u32 = @as(u32, @intCast(lparam >> 16)) & 0xFF;
                     const virtual_key: u32 = keyboard_and_mouse.MapVirtualKeyW(scan_code, windows_and_messaging.MAPVK_VSC_TO_VK);
 
                     var keyboard: [256]u8 = [_]u8{0} ** 256;
                     getKeyboardState(&keyboard);
+
+                    const modifiers: u4 = getModifiers(&keyboard);
+
+                    // Reset keyboard state for modifiers so they aren't processed with `ToUnicode`
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_CONTROL)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_SHIFT)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_MENU)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_LCONTROL)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_LSHIFT)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_LMENU)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_RCONTROL)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_RSHIFT)] = 0;
+                    keyboard[@intFromEnum(keyboard_and_mouse.VK_RMENU)] = 0;
 
                     var buffer: [3:0]u16 = [_:0]u16{0} ** 3;
                     const result = keyboard_and_mouse.ToUnicode(
@@ -227,19 +206,19 @@ fn wndProc(
                     );
 
                     // TODO: If dead key then store for later and combine with next char/key input
-
                     if (result == 0) {
                         std.log.debug("[{d}] ToUnicode failed", .{result});
                     } else if (result < 0) {
                         std.log.debug("[{d}] Dead key detected", .{result});
                     } else {
-                        const data = unicode.utf16LeToUtf8Alloc(allocator, buffer[0..]) catch unreachable;
-                        defer allocator.free(data);
+                        const data = unicode.utf16LeToUtf8Alloc(target.allocator, buffer[0..]) catch unreachable;
+                        defer target.allocator.free(data);
                         if (data.len <= 4) {
                             el.handle_event(
                                 Event{
                                     .key_input = .{
                                         .key = .{ .char = data[0..] },
+                                        .modifiers = modifiers,
                                         .state = .pressed,
                                         .scan = scan_code,
                                         .virtual = virtual_key,
@@ -251,12 +230,18 @@ fn wndProc(
                     }
                 },
                 windows_and_messaging.WM_KEYDOWN => {
-                    // TODO:
                     if (input.parseVirtualKey(wparam, lparam)) |key| {
+                        // Keyboard state to better match keyboard input with virtual keys
+                        var keyboard: [256]u8 = [_]u8{0} ** 256;
+                        getKeyboardState(&keyboard);
+
+                        const modifiers: u4 = getModifiers(&keyboard);
+
                         el.handle_event(
                             Event{
                                 .key_input = .{
                                     .key = .{ .virtual = key },
+                                    .modifiers = modifiers,
                                     .state = .pressed,
                                 },
                             },
@@ -264,10 +249,6 @@ fn wndProc(
                         );
                     }
 
-                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
-                },
-                windows_and_messaging.WM_KEYUP => {
-                    // TODO:
                     return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
                 },
                 // MouseMove event
@@ -696,4 +677,42 @@ fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) Error![:0]u1
     const utf16le_len = try unicode.utf8ToUtf16Le(utf16le[0..], data[0..]);
     assert(len == utf16le_len);
     return utf16le;
+}
+
+const PRESSED: u8 = 0b10000000;
+
+fn anyKeySet(keyboard: *const [256]u8, keys: []const VIRTUAL_KEY) bool {
+    for (keys) |key| {
+        if (key == keyboard_and_mouse.VK_CAPITAL or key == keyboard_and_mouse.VK_NUMLOCK) {
+            if (keyboard[@intFromEnum(key)] & 1 == 1) return true;
+        } else if (keyboard[@intFromEnum(key)] & PRESSED == PRESSED) return true;
+    }
+    return false;
+}
+
+fn getModifiers(keyboard: *const [256]u8) u4 {
+    var modifiers: u4 = 0;
+    if (anyKeySet(keyboard, &[3]VIRTUAL_KEY{
+        VK_CONTROL,
+        VK_LCONTROL,
+        VK_RCONTROL,
+    })) {
+        modifiers |= input.CTRL;
+    }
+    if (anyKeySet(keyboard, &[3]VIRTUAL_KEY{
+        VK_ALT,
+        VK_LALT,
+        VK_RALT,
+    })) {
+        modifiers |= input.ALT;
+    }
+    if (anyKeySet(keyboard, &[3]VIRTUAL_KEY{
+        VK_SHIFT,
+        VK_LSHIFT,
+        VK_RSHIFT,
+    })) {
+        modifiers |= input.SHIFT;
+    }
+
+    return modifiers;
 }

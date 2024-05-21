@@ -3,6 +3,10 @@
 
 // Winit Reference: https://github.com/rust-windowing/winit/blob/master/src/keyboard.rs#L1476
 
+pub const CTRL: u4 = 0b0001;
+pub const ALT: u4 = 0b0010;
+pub const SHIFT: u4 = 0b0100;
+
 pub const Key = union(enum) {
     virtual: VirtualKey,
     char: []u8,

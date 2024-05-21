@@ -47,7 +47,6 @@
             .url = "https://github.com/marlersoft/zigwin32/archive/254f14274941d4b5fbf34a56a9e2950ccf2ae1f3.tar.gz",
             .hash = "1220cc84caf7afd287b70a628f130391f4b75b8c4f20ae2b04fe7932830a0d9e3f1f",
             // .path = "../zigwin32gen/zigwin32",
-            .lazy = true,
         },
     },
 
