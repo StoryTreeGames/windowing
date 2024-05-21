@@ -10,10 +10,6 @@ const cursor = znwl.cursor;
 const EventLoop = znwl.events.EventLoop;
 
 const State = struct {
-    ctrl: bool = false,
-    alt: bool = false,
-    shift: bool = false,
-
     captured: bool = false,
     focused: bool = false,
 
@@ -70,9 +66,6 @@ const State = struct {
             .key_input => |ke| {
                 switch (ke.key) {
                     .virtual => |virtual| switch (virtual) {
-                        .shift => state.shift = (ke.state == .pressed),
-                        .control => state.ctrl = (ke.state == .pressed),
-                        .alt => state.alt = (ke.state == .pressed),
                         .escape => if (ke.state == .pressed) target.close(),
                         .tab => {
                             target.setIcon(state.toggleIcon()) catch unreachable;
@@ -88,11 +81,11 @@ const State = struct {
                     // Exit after pressing the escape key
                     .char => |char| {
                         if (ke.state == .pressed) {
-                            std.log.debug("[ {s} ] {s}{s}{s}{c}", .{
+                            std.log.debug("DEV [ {s} ] {s}{s}{s}{s}", .{
                                 if (ke.state == .pressed) "PRESSED" else "RELEASED",
-                                if (state.ctrl) "ctrl+" else "",
-                                if (state.alt) "alt+" else "",
-                                if (state.shift) "shift+" else "",
+                                if (ke.isCtrl()) "ctrl+" else "",
+                                if (ke.isAlt()) "alt+" else "",
+                                if (ke.isShift()) "shift+" else "",
                                 char,
                             });
                         }
