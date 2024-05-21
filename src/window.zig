@@ -17,6 +17,7 @@
 /// - maximize
 /// - fullscreen
 /// - menu
+const std = @import("std");
 const builtin = @import("builtin");
 const Cursor = @import("cursor.zig").Cursor;
 const Icon = @import("icon.zig").Icon;
@@ -29,7 +30,9 @@ pub usingnamespace switch (builtin.target.os.tag) {
         pub usingnamespace @import("window/windows.zig");
         pub const DEFAULT: i32 = -2147483648;
     },
-    .linux => @import("window/linux.zig"),
+    .linux => struct {
+        pub usingnamespace @import("window/linux.zig");
+    },
     .macos => @import("window/apple.zig"),
     else => @compileError("znwl doesn't support the current operating system: " ++ @tagName(builtin.target.os.tag)),
 };

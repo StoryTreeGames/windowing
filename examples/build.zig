@@ -166,7 +166,7 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "dev",
-        .root_source_file = .{ .path = "src/dev.zig" },
+        .root_source_file = b.path("src/dev.zig"),
         .target = target,
         .optimize = optimize,
     });

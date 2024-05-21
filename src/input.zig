@@ -390,5 +390,13 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
             };
         }
     },
+    .linux => struct {
+        pub fn parseVirtualKey(wparam: usize, lparam: isize) ?VirtualKey {
+            _ = wparam;
+            _ = lparam;
+            @import("std").debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux parseVirtualKey", .{});
+            return null;
+        }
+    },
     else => |tag| @compileError("Unsupported operating system: " ++ @tagName(tag)),
 };

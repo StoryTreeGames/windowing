@@ -37,11 +37,17 @@
         //    // build root. In this case the package's hash is irrelevant and therefore not
         //    // computed. This field and `url` are mutually exclusive.
         //    .path = "foo",
+
+        //    // When this is set to `true`, a package is declared to be lazily
+        //    // fetched. This makes the dependency only get fetched if it is
+        //    // actually used.
+        //    .lazy = false,
         //},
         .zigwin32 = .{
             .url = "https://github.com/marlersoft/zigwin32/archive/254f14274941d4b5fbf34a56a9e2950ccf2ae1f3.tar.gz",
             .hash = "1220cc84caf7afd287b70a628f130391f4b75b8c4f20ae2b04fe7932830a0d9e3f1f",
             // .path = "../zigwin32gen/zigwin32",
+            .lazy = true,
         },
     },
 

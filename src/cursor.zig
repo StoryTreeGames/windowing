@@ -114,5 +114,11 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
             };
         }
     },
-    else => @compileError("Unkown os"),
+    .linux => struct {
+        pub fn cursorToResource(cursor: CursorOption) void {
+            _ = cursor;
+            @import("std").debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux cursorToResource", .{});
+        }
+    },
+    else => |tag| @compileError("Unkown os " ++ @tagName(tag)),
 };
