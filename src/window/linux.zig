@@ -29,7 +29,7 @@ pub fn init(
     event_loop: *EventLoop,
     options: window.CreateOptions,
 ) !*Window {
-    std.debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux window for x11 & wayland", .{});
+    std.debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux window for x11 & wayland\n", .{});
     _ = event_loop;
     _ = options;
 

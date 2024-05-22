@@ -1,4 +1,5 @@
 const std = @import("std");
+const Tag = std.Target.Os.Tag;
 const builtin = @import("builtin");
 
 const zig = @import("win32").zig;
@@ -132,14 +133,17 @@ pub const EventLoop = struct {
     /// Run the event/message loop which allows windows to recieve events
     pub fn run(self: *EventLoop) void {
         switch (builtin.target.os.tag) {
-            .windows => {
+            Tag.windows => {
                 var message: windows_and_messaging.MSG = undefined;
                 while (self.windowCount > 0 and windows_and_messaging.GetMessageW(&message, null, 0, 0) == zig.TRUE) {
                     _ = windows_and_messaging.TranslateMessage(&message);
                     _ = windows_and_messaging.DispatchMessageW(&message);
                 }
             },
-            else => {},
+            // TODO: Add run impls for other systems
+            else => |tag| {
+                std.debug.print("\x1b[33;1mWARNING:\x1b[0m Event loop run is not implemented for the current os <{s}>\n", .{@tagName(tag)});
+            },
         }
     }
 };

@@ -1,4 +1,5 @@
 const std = @import("std");
+const Tag = std.Target.Os.Tag;
 const builtin = @import("builtin");
 
 // Although this function looks imperative, note that its job is to
@@ -17,7 +18,7 @@ pub fn build(b: *std.Build) void {
 
     // Add platform specific dependencies
     switch (builtin.target.os.tag) {
-        .windows => {
+        Tag.windows => {
             // Note: To build exe so a console window doesn't appear
             // Add this to any exe build: `exe.subsystem = .Windows;`
             znwl.addImport(
