@@ -185,13 +185,13 @@ fn wndProc(
 
                     // Reset keyboard state for modifiers so they aren't processed with `ToUnicode`
                     keyboard[@intFromEnum(keyboard_and_mouse.VK_CONTROL)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_SHIFT)] = 0;
+                    // keyboard[@intFromEnum(keyboard_and_mouse.VK_SHIFT)] = 0;
                     keyboard[@intFromEnum(keyboard_and_mouse.VK_MENU)] = 0;
                     keyboard[@intFromEnum(keyboard_and_mouse.VK_LCONTROL)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_LSHIFT)] = 0;
+                    // keyboard[@intFromEnum(keyboard_and_mouse.VK_LSHIFT)] = 0;
                     keyboard[@intFromEnum(keyboard_and_mouse.VK_LMENU)] = 0;
                     keyboard[@intFromEnum(keyboard_and_mouse.VK_RCONTROL)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_RSHIFT)] = 0;
+                    // keyboard[@intFromEnum(keyboard_and_mouse.VK_RSHIFT)] = 0;
                     keyboard[@intFromEnum(keyboard_and_mouse.VK_RMENU)] = 0;
 
                     var buffer: [3:0]u16 = [_:0]u16{0} ** 3;

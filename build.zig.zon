@@ -17,7 +17,7 @@
     .dependencies = .{
         .zigwin32 = .{
             .url = "https://github.com/Tired-Fox/zigwin32/archive/main.tar.gz",
-            .hash = "1220b7c7d1b2f607ecc3ad134caa3d30135789ea171ef9f82afcd04dc4e6f055afff",
+            .hash = "122016034fa12553ced2c60365a2a1281bdb43515d2a67365de71c111f29a3316e65",
         },
     },
     .paths = .{
