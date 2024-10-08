@@ -153,7 +153,9 @@ const Converter = switch (builtin.target.os.tag) {
         pub fn toEvent(window: *Window, msg: u32, wparam: foundation.WPARAM, lparam: foundation.LPARAM) ?Event {
             switch (msg) {
                 // Request to close the window
-                windows_and_messaging.WM_CLOSE => return Event.close,
+                windows_and_messaging.WM_CLOSE, windows_and_messaging.WM_DESTROY => {
+                    return Event.close;
+                },
                 windows_and_messaging.WM_SETCURSOR => {
                     // Set user defined cursor
                     _ = windows_and_messaging.SetCursor(window.getHCursor());
@@ -326,9 +328,9 @@ pub fn EventLoop(State: type) type {
 
         pub fn create_window(self: *@This(), options: CreateOptions) !*const Window {
             const window = try Window.init(self.allocator, options);
-            std.debug.print("{any}", .{window.*});
-            try self.windows.put(window.id(), window);
-            return self.windows.get(window.id()).?;
+            const id = window.id();
+            try self.windows.put(id, window);
+            return self.windows.get(id).?;
         }
 
         /// Run the event/message loop which allows windows to recieve events
@@ -341,20 +343,20 @@ pub fn EventLoop(State: type) type {
                     var message: windows_and_messaging.MSG = undefined;
                     while (self.windows.count() > 0 and windows_and_messaging.GetMessageW(&message, null, 0, 0) == zig.TRUE) {
                         _ = windows_and_messaging.TranslateMessage(&message);
-
                         const id = @intFromPtr(message.hwnd);
 
                         if (self.windows.get(id)) |window| {
                             if (Converter.toEvent(window, message.message, message.wParam, message.lParam)) |event| {
                                 self.state.onEvent(window, event);
-                                if (!window.alive) {
-                                    if (self.windows.get(id)) |w| {
-                                        w.deinit();
-                                    }
-                                    _ = self.windows.remove(id);
-                                }
                             } else {
                                 _ = windows_and_messaging.DispatchMessageW(&message);
+                            }
+
+                            if (!window.alive) {
+                                if (self.windows.get(id)) |w| {
+                                    w.deinit();
+                                }
+                                _ = self.windows.remove(id);
                             }
                         } else {
                             _ = windows_and_messaging.DispatchMessageW(&message);
@@ -363,7 +365,7 @@ pub fn EventLoop(State: type) type {
                 },
                 // TODO: Add run impls for other systems
                 else => |tag| {
-                    std.debug.print("\x1b[33;1mWARNING:\x1b[0m Event loop run is not implemented for the current os <{s}>\n", .{@tagName(tag)});
+                    std.log.err("Event loop run is not implemented for the current os <{s}>\n", .{@tagName(tag)});
                 },
             }
         }

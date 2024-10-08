@@ -127,6 +127,55 @@ fn getHIcon(self: *Window) ?windows_and_messaging.HICON {
         )),
     };
 }
+fn wndProc(
+    hwnd: foundation.HWND,
+    uMsg: u32,
+    wparam: foundation.WPARAM,
+    lparam: foundation.LPARAM,
+) callconv(WINAPI) foundation.LRESULT {
+    if (uMsg == windows_and_messaging.WM_CREATE) {
+        // Get CREATESTRUCTW pointer from lparam
+        const lpptr: usize = @intCast(lparam);
+        const create_struct: *windows_and_messaging.CREATESTRUCTA = @ptrFromInt(lpptr);
+
+        // If lpCreateParams exists then assign window data/state
+        if (create_struct.lpCreateParams) |create_params| {
+            // Cast from anyopaque to an expected EventLoop
+            // this includes casting the pointer alignment
+            const event_loop: *Window = @ptrCast(@alignCast(create_params));
+            // Cast pointer to isize for setting data
+            const long_ptr: usize = @intFromPtr(event_loop);
+            const ptr: isize = @intCast(long_ptr);
+            _ = windows_and_messaging.SetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA, ptr);
+        }
+    } else {
+        // Get window state/data pointer
+        const ptr = windows_and_messaging.GetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA);
+        // Cast int to optional EventLoop pointer
+        const lptr: usize = @intCast(ptr);
+        const win: ?*Window = @ptrFromInt(lptr);
+
+        if (win) |target| {
+            switch (uMsg) {
+                windows_and_messaging.WM_DESTROY => {
+                    target.alive = false;
+                    windows_and_messaging.PostQuitMessage(0);
+                },
+                else => {},
+            }
+            return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
+        } else {
+            switch (uMsg) {
+                windows_and_messaging.WM_DESTROY => {
+                    windows_and_messaging.PostQuitMessage(0);
+                },
+                else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
+            }
+        }
+    }
+
+    return 0;
+}
 
 /// Create a new window
 ///
@@ -212,7 +261,7 @@ pub fn init(
         .lpszMenuName = null,
 
         .hInstance = instance,
-        .lpfnWndProc = windows_and_messaging.DefWindowProcW, // wndProc,
+        .lpfnWndProc = wndProc, // wndProc,
     };
     const result = windows_and_messaging.RegisterClassW(&wnd_class);
 
@@ -244,8 +293,7 @@ pub fn init(
         null, // Parent
         null, // Menu
         instance,
-        null,
-        // @ptrCast(win), // WM_CREATE lpParam
+        @ptrCast(win), // WM_CREATE lpParam
     );
 
     if (hwnd == null) {
