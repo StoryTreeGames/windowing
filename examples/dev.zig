@@ -153,7 +153,7 @@ pub fn main() !void {
             .title = "Zig window",
             .width = 300,
             .height = 400,
-            .icon = .{ .custom = "assets\\icon.ico" },
+            .icon = .{ .custom = "examples\\assets\\icon.ico" },
             .cursor = .{ .icon = .pointer },
         },
     );
