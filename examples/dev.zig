@@ -1,13 +1,12 @@
 const std = @import("std");
 
-pub const znwl = @import("znwl");
+pub const core = @import("storytree-core");
 
-const Window = znwl.Window;
-const Target = Window.Target;
-const Event = znwl.events.Event;
-const icon = znwl.icon;
-const cursor = znwl.cursor;
-const EventLoop = znwl.events.EventLoop;
+const Window = core.Window;
+const Event = core.event.Event;
+const Icon = core.icon.Icon;
+const Cursor = core.cursor.Cursor;
+const EventLoop = core.event.EventLoop;
 
 const State = struct {
     captured: bool = false,
@@ -17,7 +16,7 @@ const State = struct {
     icon: enum { default, security } = .default,
     title: enum { first, second } = .first,
 
-    pub fn toggleCursor(self: *State) cursor.Cursor {
+    pub fn toggleCursor(self: *State) Cursor {
         switch (self.cursor) {
             .pointer => {
                 self.cursor = .default;
@@ -30,7 +29,7 @@ const State = struct {
         }
     }
 
-    pub fn toggleIcon(self: *State) icon.Icon {
+    pub fn toggleIcon(self: *State) Icon {
         switch (self.icon) {
             .security => {
                 self.icon = .default;
@@ -56,25 +55,23 @@ const State = struct {
         }
     }
 
-    pub fn handler(self: *anyopaque, event: Event, target: *Target) void {
-        var state: *State = @ptrCast(@alignCast(self));
-
+    pub fn onEvent(self: *@This(), window: *Window, event: Event) void {
         switch (event) {
             .close => {
-                target.close();
+                window.close();
             },
             .key_input => |ke| {
                 switch (ke.key) {
                     .virtual => |virtual| switch (virtual) {
-                        .escape => if (ke.state == .pressed) target.close(),
+                        .escape => if (ke.state == .pressed) window.close(),
                         .tab => {
-                            target.setIcon(state.toggleIcon()) catch unreachable;
-                            target.setCursor(state.toggleCursor()) catch unreachable;
-                            target.setTitle(state.toggleTitle()) catch unreachable;
+                            window.setIcon(self.toggleIcon()) catch unreachable;
+                            window.setCursor(self.toggleCursor()) catch unreachable;
+                            window.setTitle(self.toggleTitle()) catch unreachable;
                         },
-                        .down => target.minimize(),
-                        .up => target.restore(),
-                        .right => target.maximize(),
+                        .down => window.minimize(),
+                        .up => window.restore(),
+                        .right => window.maximize(),
                         .f1 => std.log.debug("F1", .{}),
                         else => {},
                     },
@@ -83,9 +80,9 @@ const State = struct {
                         if (ke.state == .pressed) {
                             std.log.debug("DEV [ {s} ] {s}{s}{s}{s}", .{
                                 if (ke.state == .pressed) "PRESSED" else "RELEASED",
-                                if (ke.isCtrl()) "ctrl+" else "",
-                                if (ke.isAlt()) "alt+" else "",
-                                if (ke.isShift()) "shift+" else "",
+                                if (ke.modifiers.ctrl) "ctrl+" else "",
+                                if (ke.modifiers.alt) "alt+" else "",
+                                if (ke.modifiers.shift) "shift+" else "",
                                 char,
                             });
                         }
@@ -94,27 +91,27 @@ const State = struct {
             },
             .mouse_input => |me| {
                 if (me.state == .pressed and me.button == .left) {
-                    target.setCapture(true);
-                    state.captured = true;
+                    window.setCapture(true);
+                    self.captured = true;
                 } else if (me.state == .released and me.button == .left) {
-                    target.setCapture(false);
-                    state.captured = false;
+                    window.setCapture(false);
+                    self.captured = false;
                 }
                 std.log.debug("Mouse Input: {any}", .{me});
             },
             .mouse_move => |me| {
-                if (state.captured) {
+                if (self.captured) {
                     // Lock the cursor to the center of the screen
                     // this is useful for situations like games where
                     // you capture the mouse and only want the delta of how
                     // much the mouse moved
-                    const rect = target.getRect();
+                    const rect = window.getRect();
                     const x = @divTrunc(rect.width(), 2);
                     const y = @divTrunc(rect.height(), 2);
 
                     std.log.debug("Delta: (dx: {d}, dy: {d})", .{ me.x - x, me.y - y });
-                    target.setCursorPos(x, y);
-                } else if (state.focused) {
+                    window.setCursorPos(x, y);
+                } else if (self.focused) {
                     std.log.debug("Position: (x: {d}, y: {d})", .{ me.x, me.y });
                 }
             },
@@ -122,10 +119,10 @@ const State = struct {
                 std.log.debug("Scroll: {any}", .{scroll});
             },
             .focused => |focused| {
-                state.focused = focused;
+                self.focused = focused;
             },
             .resize => |re| {
-                if (state.focused) {
+                if (self.focused) {
                     std.log.debug("Resize: [width: {d}, height: {d}]", .{ re.width, re.height });
                 }
             },
@@ -136,28 +133,21 @@ const State = struct {
 
 // TODO: How to make state optional?
 pub fn main() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
     var state = State{};
-    var event_loop = EventLoop.init(&state, &State.handler);
+    var event_loop = EventLoop(State).init(allocator, &state);
+    defer event_loop.deinit();
 
-    // Needed to allocate title and class strings
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer {
-        _ = gpa.deinit();
-    }
-    const allocator = gpa.allocator();
-
-    const win = try Window.init(
-        allocator,
-        &event_loop,
-        .{
-            .title = "Zig window",
-            .width = 300,
-            .height = 400,
-            .icon = .{ .custom = "examples\\assets\\icon.ico" },
-            .cursor = .{ .icon = .pointer },
-        },
-    );
-    defer win.deinit();
+    const win = try event_loop.create_window(.{
+        .title = "Zig window",
+        .width = 300,
+        .height = 400,
+        .icon = .{ .custom = "examples\\assets\\icon.ico" },
+        .cursor = .{ .icon = .pointer },
+    });
 
     // Custom debug output of window
     std.debug.print("Press <TAB> to toggle icon, cursor, and title at runtime\n", .{});

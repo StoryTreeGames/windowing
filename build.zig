@@ -2,20 +2,17 @@ const std = @import("std");
 const Tag = std.Target.Os.Tag;
 const builtin = @import("builtin");
 
-const NAME = "znwl";
+const NAME = "storytree-core";
 const EXAMPLES = "examples";
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
-pub fn build(b: *std.Build) void {
-    const list_examples = b.option(bool, "list-examples", "List all available examples") orelse false;
-    const example_name = b.option([]const u8, "example", "Run a specific example after building");
-
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const VERSION = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 0 };
+    // const VERSION = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 0 };
     const LIB_PATH = b.path("src/root.zig");
 
     // ========================================================================
@@ -23,6 +20,8 @@ pub fn build(b: *std.Build) void {
     // ========================================================================
 
     const module = b.addModule(NAME, .{ .root_source_file = LIB_PATH });
+
+    module.addImport("uuid", b.dependency("uuid", .{}).module("uuid"));
 
     // Add platform specific dependencies
     switch (builtin.target.os.tag) {
@@ -38,6 +37,8 @@ pub fn build(b: *std.Build) void {
         },
         else => {},
     }
+
+    try b.modules.put(b.dupe(NAME), module);
 
     // ========================================================================
     //                                  Tests
@@ -58,86 +59,22 @@ pub fn build(b: *std.Build) void {
     //                                 examples
     // ========================================================================
 
-    // Dynamically resolve the examples
+    const v4_example = addExample(b, module, "dev-example", "examples/dev.zig", target);
 
-    if (list_examples) {
-        // If the `EXAMPLES` directory exists, list all the examples in that directory in that directory.
-        if (std.fs.cwd().access(EXAMPLES, .{})) {
-            const dir = std.fs.cwd().openDir(EXAMPLES, .{ .iterate = true }) catch unreachable;
-            var walker = dir.iterate();
-            var count: usize = 1;
+    const run_dev_example = b.step("run-dev-example", "Run the dev example");
+    run_dev_example.dependOn(&v4_example.step);
+}
 
-            // Iterate children of the `EXAMPLES` directory
-            while (walker.next() catch unreachable) |entry| {
-                if (entry.kind == std.fs.File.Kind.directory) {
-                    // If the entry is a directory and has a `main.zig`
-                    // treat that as an example entry point where the example can be multiple files.
+fn addExample(b: *std.Build, uuid_module: *std.Build.Module, exeName: []const u8, sourceFile: []const u8, target: std.Build.ResolvedTarget) *std.Build.Step.Run {
+    const exe = b.addExecutable(.{
+        .name = exeName,
+        .root_source_file = b.path(sourceFile),
+        .target = target,
+    });
+    exe.root_module.addImport(NAME, uuid_module);
+    b.installArtifact(exe);
 
-                    const path = b.allocator.alloc(u8, entry.name.len + 18) catch unreachable;
-                    defer b.allocator.free(path);
-                    @memcpy(path[0..8], EXAMPLES);
-                    path[8] = '/';
-                    @memcpy(path[9 .. 9 + entry.name.len], entry.name);
-                    @memcpy(path[9 + entry.name.len ..], "/main.zig");
-
-                    if (std.fs.cwd().access(path, .{})) {
-                        std.debug.print("{d}. {s}\n", .{ count, entry.name });
-                        count += 1;
-                    } else |_| {}
-                } else {
-                    // Else the entry is a file and it is treated as an example entry point
-                    // where the example is a single file.
-
-                    const ext = std.fs.path.extension(entry.name);
-                    if (std.mem.eql(u8, ext, ".zig")) {
-                        std.debug.print("{d}. {s}\n", .{ count, entry.name[0 .. entry.name.len - 4] });
-                        count += 1;
-                    }
-                }
-            }
-        } else |_| {}
-    }
-
-    // Allow the user to define a specificly defined example to run
-    if (example_name) |name| {
-        const example_file_path = b.allocator.alloc(u8, 13 + name.len) catch unreachable;
-        defer b.allocator.free(example_file_path);
-        @memcpy(example_file_path[0..8], EXAMPLES);
-        example_file_path[8] = '/';
-        @memcpy(example_file_path[9 .. 9 + name.len], name);
-        @memcpy(example_file_path[9 + name.len ..], ".zig");
-
-        const example_dir_path = b.allocator.alloc(u8, 18 + name.len) catch unreachable;
-        defer b.allocator.free(example_dir_path);
-        @memcpy(example_dir_path[0..8], EXAMPLES);
-        example_dir_path[8] = '/';
-        @memcpy(example_dir_path[9 .. 9 + name.len], name);
-        @memcpy(example_dir_path[9 + name.len ..], "/main.zig");
-
-        if (std.fs.cwd().access(example_file_path, .{})) {
-            runExample(b, .{
-                .name = name,
-                .path = example_file_path,
-                .version = VERSION,
-                .target = target,
-                .optimize = optimize,
-                .module = module,
-            });
-        } else |_| {
-            if (std.fs.cwd().access(example_dir_path, .{})) {
-                runExample(b, .{
-                    .name = name,
-                    .path = example_dir_path,
-                    .version = VERSION,
-                    .target = target,
-                    .optimize = optimize,
-                    .module = module,
-                });
-            } else |_| {
-                std.debug.print("Example '{s}' not found\n", .{name});
-            }
-        }
-    }
+    return b.addRunArtifact(exe);
 }
 
 /// Information to create and run an example.

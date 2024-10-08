@@ -2,10 +2,17 @@
 // Win32 Reference: https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
 
 // Winit Reference: https://github.com/rust-windowing/winit/blob/master/src/keyboard.rs#L1476
+const std = @import("std");
 
-pub const CTRL: u4 = 0b0001;
-pub const ALT: u4 = 0b0010;
-pub const SHIFT: u4 = 0b0100;
+pub const Modifiers = packed struct(u3) {
+    ctrl: bool = false,
+    alt: bool = false,
+    shift: bool = false,
+
+    pub fn eq(self: *const @This(), other: *const @This()) bool {
+        return @as(u3, @bitCast(self)) == @as(u3, @bitCast(other));
+    }
+};
 
 pub const Key = union(enum) {
     virtual: VirtualKey,
@@ -402,5 +409,5 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
             return null;
         }
     },
-    else => |tag| @compileError("Unsupported operating system: " ++ @tagName(tag)),
+    else => |tag| @compileError("Unsupported operating system: " ++ @tagName(tag) ++ "; input not implemented"),
 };

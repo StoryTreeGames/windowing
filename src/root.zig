@@ -1,6 +1,6 @@
-pub const uuid = @import("uuid.zig");
-pub const Window = @import("window.zig");
-pub const events = @import("events.zig");
+pub const uuid = @import("uuid");
+pub const Window = @import("window.zig").Window;
+pub const event = @import("events.zig");
 pub const input = @import("input.zig");
 pub const icon = @import("icon.zig");
 pub const cursor = @import("cursor.zig");

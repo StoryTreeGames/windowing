@@ -27,14 +27,9 @@ const Tag = @import("std").Target.Os.Tag;
 pub const Error = error{ InvalidUtf8, OutOfMemory, FileNotFound, SystemCreateWindow };
 
 /// Cross platform window representation
-pub usingnamespace switch (builtin.target.os.tag) {
-    Tag.windows => struct {
-        pub usingnamespace @import("window/windows.zig");
-        pub const DEFAULT: i32 = -2147483648;
-    },
-    Tag.linux => struct {
-        pub usingnamespace @import("window/linux.zig");
-    },
+pub const Window = switch (builtin.target.os.tag) {
+    Tag.windows => @import("window/windows.zig"),
+    Tag.linux => @import("window/linux.zig"),
     Tag.macos => @import("window/apple.zig"),
     else => @compileError("znwl doesn't support the current operating system: " ++ @tagName(builtin.target.os.tag)),
 };

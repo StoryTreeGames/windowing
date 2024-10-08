@@ -15,20 +15,24 @@ pub const IconOption = enum {
 pub usingnamespace switch (@import("builtin").target.os.tag) {
     .windows => struct {
         const wam = @import("win32").ui.windows_and_messaging;
-        const makeResourceW = @import("util.zig").makeIntResourceW;
 
-        const IDI_ERROR = makeResourceW(32513);
-        const IDI_WARNING = makeResourceW(32515);
-        const IDI_INFORMATION = makeResourceW(32516);
+        /// Helper (Windows): Make an int resource referencing the name of the resource.
+        ///
+        /// - @param `offset` The offset into the collection of resource names
+        ///
+        /// @returns Name of the resource
+        fn makeIntResourceW(comptime value: usize) [*:0]align(1) const u16 {
+            return @ptrFromInt(value);
+        }
 
         pub fn iconToResource(icon: IconOption) [*:0]align(1) const u16 {
             @import("std").debug.print("{any}", .{wam.IDI_APPLICATION});
             return switch (icon) {
                 .default => wam.IDI_APPLICATION,
-                .@"error" => IDI_ERROR,
+                .@"error" => makeIntResourceW(wam.IDI_ERROR),
                 .question => wam.IDI_QUESTION,
-                .warning => IDI_WARNING,
-                .information => IDI_INFORMATION,
+                .warning => makeIntResourceW(wam.IDI_WARNING),
+                .information => makeIntResourceW(wam.IDI_INFORMATION),
                 .security => wam.IDI_SHIELD,
             };
         }

@@ -1,5 +1,3 @@
-const util = @import("util.zig");
-
 pub const Cursor = union(enum) {
     icon: CursorOption,
     custom: struct {
@@ -59,20 +57,6 @@ pub const CursorOption = enum {
 pub usingnamespace switch (@import("builtin").target.os.tag) {
     .windows => struct {
         const wam = @import("win32").ui.windows_and_messaging;
-        // const ARROW = util.makeIntResourceW(32512);
-        // pub const IDC_HAND = @import("win32").zig.typedConst([*:0]align(1) const u16, @as(u32, 32649));
-        // const HAND = util.makeIntResourceW(32649);
-        // const CROSS = util.makeIntResourceW(32515);
-        // const IBEAM = util.makeIntResourceW(32513);
-        // const NO = util.makeIntResourceW(32648);
-        // const SIZEALL = util.makeIntResourceW(32646);
-        // const SIZEWE = util.makeIntResourceW(32644);
-        // const SIZENS = util.makeIntResourceW(32645);
-        // const SIZENESW = util.makeIntResourceW(32643);
-        // const SIZENWSE = util.makeIntResourceW(32642);
-        // const WAIT = util.makeIntResourceW(32514);
-        // const HELP = util.makeIntResourceW(32651);
-        // const APPSTARTING = util.makeIntResourceW(32650);
 
         pub fn cursorToResource(cursor: CursorOption) [*:0]align(1) const u16 {
             return switch (cursor) {
@@ -120,5 +104,5 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
             @import("std").debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux cursorToResource", .{});
         }
     },
-    else => |tag| @compileError("Unkown os " ++ @tagName(tag)),
+    else => |tag| @compileError("Unkown os " ++ @tagName(tag) ++ "; cursor not implemented"),
 };

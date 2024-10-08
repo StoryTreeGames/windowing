@@ -34,13 +34,11 @@ const input = @import("../input.zig");
 const cursor = @import("../cursor.zig");
 const icon = @import("../icon.zig");
 const window = @import("../window.zig");
-const util = @import("../util.zig");
 
 const Position = root.Position;
-const UUID = root.uuid.UUID;
+const uuid = @import("uuid");
 
 const Event = events.Event;
-const EventLoop = events.EventLoop;
 const KeyEvent = events.KeyEvent;
 const ButtonState = events.ButtonState;
 
@@ -56,8 +54,6 @@ const CreateOptions = window.CreateOptions;
 const ShowState = window.ShowState;
 
 const Window = @This();
-
-const IDI_APPLICATION = util.makeIntResourceW(32512);
 
 title: [:0]const u16,
 class: [:0]const u16,
@@ -78,11 +74,12 @@ cursor: union(enum) {
 
 handle: ?foundation.HWND,
 allocator: std.mem.Allocator,
-event_loop: *EventLoop,
 
-pub const Target = @This();
+alive: bool,
 
-pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+pub const Target = Window;
+
+pub fn format(value: Window, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -93,7 +90,7 @@ pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, 
     return writer.print("Window {{ title: '{s}', class: '{s}' }}", .{ title, class });
 }
 
-fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
+pub fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
     return switch (self.cursor) {
         .icon => |i| windows_and_messaging.LoadCursorW(null, cursor.cursorToResource(i)),
         .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
@@ -131,227 +128,6 @@ fn getHIcon(self: *Window) ?windows_and_messaging.HICON {
     };
 }
 
-fn wndProc(
-    hwnd: foundation.HWND,
-    uMsg: u32,
-    wparam: foundation.WPARAM,
-    lparam: foundation.LPARAM,
-) callconv(WINAPI) foundation.LRESULT {
-    if (uMsg == windows_and_messaging.WM_CREATE) {
-        // Get CREATESTRUCTW pointer from lparam
-        const lpptr: usize = @intCast(lparam);
-        const create_struct: *windows_and_messaging.CREATESTRUCTA = @ptrFromInt(lpptr);
-
-        // If lpCreateParams exists then assign window data/state
-        if (create_struct.lpCreateParams) |create_params| {
-            // Cast from anyopaque to an expected EventLoop
-            // this includes casting the pointer alignment
-            const event_loop: *Window = @ptrCast(@alignCast(create_params));
-            // Cast pointer to isize for setting data
-            const long_ptr: usize = @intFromPtr(event_loop);
-            const ptr: isize = @intCast(long_ptr);
-            _ = windows_and_messaging.SetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA, ptr);
-        }
-    } else {
-        // Get window state/data pointer
-        const ptr = windows_and_messaging.GetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA);
-        // Cast int to optional EventLoop pointer
-        const lptr: usize = @intCast(ptr);
-        const win: ?*Window = @ptrFromInt(lptr);
-
-        if (win) |target| {
-            const el = target.event_loop;
-
-            switch (uMsg) {
-                // Request to close the window
-                windows_and_messaging.WM_CLOSE => {
-                    el.handle_event(Event.close, target);
-                },
-                windows_and_messaging.WM_SETCURSOR => {
-                    // Set user defined cursor
-                    _ = windows_and_messaging.SetCursor(target.getHCursor());
-                    // Allow for resize cursor to be drawn if cursor is at correct position
-                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
-                },
-                // Keyboard input evenets
-                windows_and_messaging.WM_CHAR, windows_and_messaging.WM_SYSCHAR => {
-                    const scan_code: u32 = @as(u32, @intCast(lparam >> 16)) & 0xFF;
-                    const virtual_key: u32 = keyboard_and_mouse.MapVirtualKeyW(scan_code, windows_and_messaging.MAPVK_VSC_TO_VK);
-
-                    var keyboard: [256]u8 = [_]u8{0} ** 256;
-                    getKeyboardState(&keyboard);
-
-                    const modifiers: u4 = getModifiers(&keyboard);
-
-                    // Reset keyboard state for modifiers so they aren't processed with `ToUnicode`
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_CONTROL)] = 0;
-                    // keyboard[@intFromEnum(keyboard_and_mouse.VK_SHIFT)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_MENU)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_LCONTROL)] = 0;
-                    // keyboard[@intFromEnum(keyboard_and_mouse.VK_LSHIFT)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_LMENU)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_RCONTROL)] = 0;
-                    // keyboard[@intFromEnum(keyboard_and_mouse.VK_RSHIFT)] = 0;
-                    keyboard[@intFromEnum(keyboard_and_mouse.VK_RMENU)] = 0;
-
-                    var buffer: [3:0]u16 = [_:0]u16{0} ** 3;
-                    const result = keyboard_and_mouse.ToUnicode(
-                        virtual_key,
-                        scan_code,
-                        &keyboard,
-                        &buffer,
-                        3,
-                        // Set it to not modify keyboard state. Windows 1607 and above
-                        0,
-                    );
-
-                    // TODO: If dead key then store for later and combine with next char/key input
-                    if (result == 0) {
-                        std.log.debug("[{d}] ToUnicode failed", .{result});
-                    } else if (result < 0) {
-                        std.log.debug("[{d}] Dead key detected", .{result});
-                    } else {
-                        const data = unicode.utf16LeToUtf8Alloc(target.allocator, buffer[0..]) catch unreachable;
-                        defer target.allocator.free(data);
-                        if (data.len <= 4) {
-                            el.handle_event(
-                                Event{
-                                    .key_input = .{
-                                        .key = .{ .char = data[0..] },
-                                        .modifiers = modifiers,
-                                        .state = .pressed,
-                                        .scan = scan_code,
-                                        .virtual = virtual_key,
-                                    },
-                                },
-                                target,
-                            );
-                        }
-                    }
-                },
-                windows_and_messaging.WM_KEYDOWN => {
-                    if (input.parseVirtualKey(wparam, lparam)) |key| {
-                        // Keyboard state to better match keyboard input with virtual keys
-                        var keyboard: [256]u8 = [_]u8{0} ** 256;
-                        getKeyboardState(&keyboard);
-
-                        const modifiers: u4 = getModifiers(&keyboard);
-
-                        el.handle_event(
-                            Event{
-                                .key_input = .{
-                                    .key = .{ .virtual = key },
-                                    .modifiers = modifiers,
-                                    .state = .pressed,
-                                },
-                            },
-                            target,
-                        );
-                    }
-
-                    return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
-                },
-                // MouseMove event
-                windows_and_messaging.WM_MOUSEMOVE => {
-                    if (lparam >= 0) {
-                        const pos: usize = @intCast(lparam);
-                        const x: u16 = @truncate(pos);
-                        const y: u16 = @truncate(pos >> 16);
-                        el.handle_event(Event{ .mouse_move = .{ .x = x, .y = y } }, target);
-                    }
-                },
-                // Mouse scrolling events
-                windows_and_messaging.WM_MOUSEWHEEL => {
-                    const params: isize = @intCast(wparam);
-                    const distance: i16 = @truncate(params >> 16);
-
-                    el.handle_event(
-                        Event{ .mouse_scroll = .{
-                            .direction = .vertical,
-                            .delta = distance,
-                        } },
-                        target,
-                    );
-                },
-                windows_and_messaging.WM_MOUSEHWHEEL => {
-                    const params: isize = @intCast(wparam);
-                    const distance: i16 = @truncate(params >> 16);
-
-                    el.handle_event(
-                        Event{ .mouse_scroll = .{
-                            .direction = .horizontal,
-                            .delta = distance,
-                        } },
-                        target,
-                    );
-                },
-                // Mouse button events == MouseInput
-                windows_and_messaging.WM_LBUTTONDOWN => el.handle_event(
-                    Event{ .mouse_input = .{ .state = .pressed, .button = .left } },
-                    target,
-                ),
-                windows_and_messaging.WM_LBUTTONUP => el.handle_event(
-                    Event{ .mouse_input = .{ .state = .released, .button = .left } },
-                    target,
-                ),
-                windows_and_messaging.WM_MBUTTONDOWN => el.handle_event(
-                    Event{ .mouse_input = .{ .state = .pressed, .button = .middle } },
-                    target,
-                ),
-                windows_and_messaging.WM_MBUTTONUP => el.handle_event(
-                    Event{ .mouse_input = .{ .state = .released, .button = .middle } },
-                    target,
-                ),
-                windows_and_messaging.WM_RBUTTONDOWN => el.handle_event(
-                    Event{ .mouse_input = .{ .state = .pressed, .button = .right } },
-                    target,
-                ),
-                windows_and_messaging.WM_RBUTTONUP => el.handle_event(
-                    Event{ .mouse_input = .{ .state = .released, .button = .right } },
-                    target,
-                ),
-                windows_and_messaging.WM_XBUTTONDOWN => el.handle_event(
-                    Event{ .mouse_input = .{
-                        .state = .pressed,
-                        .button = if ((wparam >> 16) & 0x0001 == 0x0001) .x1 else .x2,
-                    } },
-                    target,
-                ),
-                windows_and_messaging.WM_XBUTTONUP => el.handle_event(
-                    Event{ .mouse_input = .{
-                        .state = .released,
-                        .button = if ((wparam >> 16) & 0x0001 == 0x0001) .x1 else .x2,
-                    } },
-                    target,
-                ),
-                // Check for focus and unfocus
-                windows_and_messaging.WM_SETFOCUS => el.handle_event(Event{ .focused = true }, target),
-                windows_and_messaging.WM_KILLFOCUS => el.handle_event(Event{ .focused = false }, target),
-                windows_and_messaging.WM_SIZE => {
-                    const size: usize = @intCast(lparam);
-                    el.handle_event(
-                        Event{ .resize = .{
-                            .width = @truncate(size),
-                            .height = @truncate(size >> 16),
-                        } },
-                        target,
-                    );
-                },
-                else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
-            }
-        } else {
-            switch (uMsg) {
-                windows_and_messaging.WM_DESTROY => {
-                    windows_and_messaging.PostQuitMessage(0);
-                },
-                else => return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam),
-            }
-        }
-    }
-
-    return 0;
-}
-
 /// Create a new window
 ///
 /// - @param `allocator` Allocates the tile and class for the window. Must live longer than the window
@@ -361,11 +137,8 @@ fn wndProc(
 /// @returns `Window` An instance of a window. Contains methods to manipulate the window.
 pub fn init(
     allocator: std.mem.Allocator,
-    event_loop: *EventLoop,
     options: CreateOptions,
 ) Error!*Window {
-    event_loop.ref();
-
     var win = try allocator.create(Window);
     errdefer win.deinit();
 
@@ -376,7 +149,7 @@ pub fn init(
         .cursor = .{ .icon = .default },
         .handle = null,
         .allocator = allocator,
-        .event_loop = event_loop,
+        .alive = true,
     };
 
     switch (options.icon) {
@@ -439,7 +212,7 @@ pub fn init(
         .lpszMenuName = null,
 
         .hInstance = instance,
-        .lpfnWndProc = wndProc,
+        .lpfnWndProc = windows_and_messaging.DefWindowProcW, // wndProc,
     };
     const result = windows_and_messaging.RegisterClassW(&wnd_class);
 
@@ -459,10 +232,10 @@ pub fn init(
         .MAXIMIZE = @intFromBool(options.state == .maximize),
     };
 
-    const handle = windows_and_messaging.CreateWindowExW(
+    const hwnd = windows_and_messaging.CreateWindowExW(
         windows_and_messaging.WINDOW_EX_STYLE{},
-        win.class.ptr, // Class name
-        win.title.ptr, // Window name
+        win.class.ptr,
+        win.title.ptr,
         window_style, // style
         if (options.x) |x| x else windows_and_messaging.CW_USEDEFAULT,
         if (options.y) |y| y else windows_and_messaging.CW_USEDEFAULT, // initial position
@@ -471,14 +244,15 @@ pub fn init(
         null, // Parent
         null, // Menu
         instance,
-        @ptrCast(win), // WM_CREATE lpParam
+        null,
+        // @ptrCast(win), // WM_CREATE lpParam
     );
 
-    if (handle == null) {
+    if (hwnd == null) {
         return error.SystemCreateWindow;
     }
 
-    win.handle = handle;
+    win.handle = hwnd;
 
     // Set dark title bar
     var value: foundation.BOOL = undefined;
@@ -487,16 +261,21 @@ pub fn init(
         .light => value = zig.FALSE,
         .auto => value = zig.TRUE,
     }
-    _ = dwm.DwmSetWindowAttribute(handle, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &value, @sizeOf(foundation.BOOL));
+    _ = dwm.DwmSetWindowAttribute(hwnd, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &value, @sizeOf(foundation.BOOL));
     _ = windows_and_messaging.ShowWindow(win.handle, windows_and_messaging.SW_SHOWDEFAULT);
 
     return win;
 }
 
+/// Get the windows handle as an integer
+pub fn id(self: Window) usize {
+    return @intFromPtr(self.handle);
+}
+
 /// Close the current window
-pub fn close(self: Window) void {
+pub fn close(self: *Window) void {
     _ = windows_and_messaging.DestroyWindow(self.handle);
-    self.event_loop.deref();
+    self.alive = false;
 }
 
 /// Minimize the window
@@ -592,8 +371,8 @@ pub fn setCursor(self: *Window, new_cursor: Cursor) !void {
     // If the mouse is focused on the current window
     // update the cursor to the new value
     const currHandle = windows_and_messaging.GetForegroundWindow();
-    if (currHandle) |handle| {
-        if (handle == self.handle) {
+    if (currHandle) |hwnd| {
+        if (hwnd == self.handle) {
             // Get HCURSOR pointer from icon
             _ = windows_and_messaging.SetCursor(self.getHCursor());
         }
@@ -619,16 +398,16 @@ pub fn setCapture(self: Window, state: bool) void {
     }
 }
 
-fn showWindow(handle: ?foundation.HWND, state: ShowState) void {
+fn showWindow(hwnd: ?foundation.HWND, state: ShowState) void {
     std.log.debug("{any}", .{state});
-    if (handle) |hwnd| {
-        _ = windows_and_messaging.ShowWindow(hwnd, switch (state) {
+    if (hwnd) |h| {
+        _ = windows_and_messaging.ShowWindow(h, switch (state) {
             .maximize => windows_and_messaging.SW_SHOWMAXIMIZED,
             .minimize => windows_and_messaging.SW_SHOWMINIMIZED,
             .restore => windows_and_messaging.SW_RESTORE,
             else => return,
         });
-        _ = gdi.UpdateWindow(hwnd);
+        _ = gdi.UpdateWindow(h);
     }
 }
 
@@ -651,18 +430,14 @@ pub fn deinit(self: *Window) void {
 
 // --- Helpers and Utility ---
 
-fn getKeyboardState(keyboard: *[256]u8) void {
-    _ = keyboard_and_mouse.GetKeyboardState(keyboard);
-}
-
-/// Create/Allocate a unique window class with a uuid v4 prefixed with `ZNWL-`
+/// Create/Allocate a unique window class with a uuid v4 prefixed with `STC`
 fn createUIDClass(allocator: std.mem.Allocator) Error![:0]u16 {
-    // Size of ZNWL-{3}-{36}{null} == 46
-    var buffer = try std.ArrayList(u8).initCapacity(allocator, 45);
+    // Size of {3}-{36}{null} == 41
+    var buffer = try std.ArrayList(u8).initCapacity(allocator, 40);
     defer buffer.deinit();
 
-    const uuid = UUID.init();
-    try std.fmt.format(buffer.writer(), "ZNWL-FUL-{s}", .{uuid});
+    const uid = uuid.urn.serialize(uuid.v4.new());
+    try std.fmt.format(buffer.writer(), "STC-{s}", .{uid});
 
     const temp = try buffer.toOwnedSlice();
     defer allocator.free(temp);
@@ -677,42 +452,4 @@ fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) Error![:0]u1
     const utf16le_len = try unicode.utf8ToUtf16Le(utf16le[0..], data[0..]);
     assert(len == utf16le_len);
     return utf16le;
-}
-
-const PRESSED: u8 = 0b10000000;
-
-fn anyKeySet(keyboard: *const [256]u8, keys: []const VIRTUAL_KEY) bool {
-    for (keys) |key| {
-        if (key == keyboard_and_mouse.VK_CAPITAL or key == keyboard_and_mouse.VK_NUMLOCK) {
-            if (keyboard[@intFromEnum(key)] & 1 == 1) return true;
-        } else if (keyboard[@intFromEnum(key)] & PRESSED == PRESSED) return true;
-    }
-    return false;
-}
-
-fn getModifiers(keyboard: *const [256]u8) u4 {
-    var modifiers: u4 = 0;
-    if (anyKeySet(keyboard, &[3]VIRTUAL_KEY{
-        VK_CONTROL,
-        VK_LCONTROL,
-        VK_RCONTROL,
-    })) {
-        modifiers |= input.CTRL;
-    }
-    if (anyKeySet(keyboard, &[3]VIRTUAL_KEY{
-        VK_ALT,
-        VK_LALT,
-        VK_RALT,
-    })) {
-        modifiers |= input.ALT;
-    }
-    if (anyKeySet(keyboard, &[3]VIRTUAL_KEY{
-        VK_SHIFT,
-        VK_LSHIFT,
-        VK_RSHIFT,
-    })) {
-        modifiers |= input.SHIFT;
-    }
-
-    return modifiers;
 }
