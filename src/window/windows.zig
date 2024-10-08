@@ -159,7 +159,6 @@ fn wndProc(
             switch (uMsg) {
                 windows_and_messaging.WM_DESTROY => {
                     target.alive = false;
-                    windows_and_messaging.PostQuitMessage(0);
                 },
                 else => {},
             }

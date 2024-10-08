@@ -2,13 +2,7 @@ const std = @import("std");
 const Tag = std.Target.Os.Tag;
 const builtin = @import("builtin");
 
-const Window = switch (builtin.target.os.tag) {
-    .windows => @import("window/windows.zig"),
-    .linux => @import("window/linux.zig"),
-    // .macos => @import("window/macos.zig"),
-    else => @compileError("Invalid os support"),
-};
-
+const Window = @import("window.zig").Window;
 const CreateOptions = @import("window.zig").CreateOptions;
 const Key = @import("input.zig").Key;
 const Modifiers = @import("input.zig").Modifiers;
@@ -17,7 +11,6 @@ const ALT = @import("input.zig").ALT;
 const SHIFT = @import("input.zig").SHIFT;
 const MouseButton = @import("input.zig").MouseButton;
 const Position = @import("root.zig").Position;
-const Target = Window.Target;
 
 pub const KeyEvent = struct {
     /// Current button state, i.e. pressed or released
@@ -353,10 +346,10 @@ pub fn EventLoop(State: type) type {
                             }
 
                             if (!window.alive) {
+                                _ = self.windows.remove(id);
                                 if (self.windows.get(id)) |w| {
                                     w.deinit();
                                 }
-                                _ = self.windows.remove(id);
                             }
                         } else {
                             _ = windows_and_messaging.DispatchMessageW(&message);

@@ -141,10 +141,18 @@ pub fn main() !void {
     var event_loop = EventLoop(State).init(allocator, &state);
     defer event_loop.deinit();
 
-    const win = try event_loop.create_window(.{
-        .title = "Zig window",
+    const win1 = try event_loop.create_window(.{
+        .title = "Zig window 1",
         .width = 300,
         .height = 400,
+        .icon = .{ .custom = "examples\\assets\\icon.ico" },
+        .cursor = .{ .icon = .pointer },
+    });
+
+    const win2 = try event_loop.create_window(.{
+        .title = "Zig window 2",
+        .width = 800,
+        .height = 600,
         .icon = .{ .custom = "examples\\assets\\icon.ico" },
         .cursor = .{ .icon = .pointer },
     });
@@ -152,7 +160,8 @@ pub fn main() !void {
     // Custom debug output of window
     std.debug.print("Press <TAB> to toggle icon, cursor, and title at runtime\n", .{});
     std.debug.print("\x1b[1;33mWARNING\x1b[39m:\x1b[22m There are a lot of debug log statements \n\n", .{});
-    std.log.debug("{any}", .{win});
+    std.log.debug("{any}", .{win1});
+    std.log.debug("{any}", .{win2});
 
     event_loop.run();
 }
