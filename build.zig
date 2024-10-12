@@ -1,194 +1,34 @@
 const std = @import("std");
+const Tag = std.Target.Os.Tag;
 const builtin = @import("builtin");
-const http = std.http;
-const json = std.json;
 
-// {User}/{Repo}: Snektron/vulkan-zig
-// https://raw.githubusercontent.com/
-// https://api.github.com/repos/{User}/{Repo}/commits?per_page=1
-
-/// Fetch latest commit from git repository. This is a raw json array containing a single commit
-/// commit object.
-fn fetch_latest_commit(allocator: std.mem.Allocator, url: []const u8) ![]u8 {
-    var client = http.Client{ .allocator = allocator };
-    defer client.deinit();
-
-    const uri = try std.Uri.parse(url);
-
-    var server_header_buffer: [1024 * 1024]u8 = undefined;
-    const options = .{ .server_header_buffer = &server_header_buffer };
-    var req = try client.open(http.Method.GET, uri, options);
-    defer req.deinit();
-
-    try req.send(.{});
-    try req.wait();
-
-    // Temp buffer to interatively fetch response body from
-    var buffer = [_]u8{0} ** 1024;
-    var result = std.ArrayList(u8).init(allocator);
-    while (true) {
-        const index = req.readAll(&buffer) catch |err| switch (err) {
-            http.Client.Connection.ReadError.EndOfStream => break,
-            else => return err,
-        };
-        if (index == 0) {
-            break;
-        }
-
-        try result.appendSlice(buffer[0..index]);
-    }
-
-    return result.toOwnedSlice();
-}
-
-fn fetch_file(url: []const u8, dest: []const u8) !void {
-    // Try creating the file and if it already exists don't download it again
-    const file = std.fs.cwd().createFile(dest, .{}) catch unreachable;
-    defer file.close();
-
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var client = http.Client{ .allocator = allocator };
-    defer client.deinit();
-
-    const uri = try std.Uri.parse(url);
-
-    var server_header_buffer: [1024 * 1024]u8 = undefined;
-    const options = .{ .server_header_buffer = &server_header_buffer };
-    var req = try client.open(http.Method.GET, uri, options);
-    defer req.deinit();
-
-    try req.send(.{});
-    try req.wait();
-
-    // Temp buffer to interatively fetch response body from
-    var buffer = [_]u8{0} ** 1024;
-    while (true) {
-        const index = req.readAll(&buffer) catch |err| switch (err) {
-            error.EndOfStream => break,
-            else => return err,
-        };
-        if (index == 0) {
-            break;
-        }
-
-        try file.writeAll(buffer[0..index]);
-    }
-}
-
-const GitFile = struct { repo: struct {
-    user: []const u8,
-    repo: []const u8,
-}, file: []const u8 };
-
-fn ensure_file(comptime git_file: GitFile) !void {
-    std.fs.cwd().makeDir(".cache") catch {};
-    var hash: []const u8 = undefined;
-    const cache_file = ".cache/" ++ git_file.file ++ ".hash";
-
-    const file = std.fs.cwd().openFile(cache_file, .{ .mode = .read_write }) catch |err| switch (err) {
-        error.FileNotFound => try std.fs.cwd().createFile(cache_file, .{ .read = true }),
-        else => return err,
-    };
-    defer file.close();
-
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var buffered = std.io.bufferedReader(file.reader());
-    const reader = buffered.reader();
-
-    var arr = std.ArrayList(u8).init(allocator);
-    defer arr.deinit();
-
-    reader.streamUntilDelimiter(arr.writer(), '\n', null) catch |err| switch (err) {
-        error.EndOfStream => {},
-        else => return err,
-    };
-
-    hash = try arr.toOwnedSlice();
-
-    // Fetch latest commit from git
-    const body = try fetch_latest_commit(
-        allocator,
-        "https://api.github.com/repos/" ++ git_file.repo.user ++ "/" ++ git_file.repo.repo ++ "/commits?per_page=1",
-    );
-    const response = try json.parseFromSliceLeaky(json.Value, allocator, body, .{});
-    const value = response.array.items[0].object;
-
-    if (value.get("sha")) |v| {
-        if (std.mem.eql(u8, v.string, hash)) {
-            return;
-        }
-        try file.writeAll(v.string);
-    } else {
-        std.log.warn("[build] Unable to get sha from `KhronosGroup/Vulkan-Docs`", .{});
-    }
-
-    std.log.info("[build] Missing or out of date vulkan `vk.xml`", .{});
-    std.log.info("[build] Updating file `vk.xml` to latest from `KhronosGroup/Vulkan-Docs`", .{});
-    fetch_file(
-        "https://raw.githubusercontent.com/" ++ git_file.repo.user ++ "/" ++ git_file.repo.repo ++ "/main/xml/" ++ git_file.file,
-        ".cache/" ++ git_file.file,
-    ) catch unreachable;
-}
+const NAME = "storytree-core";
+const EXAMPLES = "examples";
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
-pub fn build(b: *std.Build) void {
-    // This is needed for building the vulkan-zig dependency
-    // This will automatically check a cached commit hash for updates
-    //  if there is an update the vk.xml file will be updated
-    ensure_file(.{
-        .repo = .{
-            .user = "KhronosGroup",
-            .repo = "Vulkan-Docs",
-        },
-        .file = "vk.xml",
-    }) catch unreachable;
-
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
-    const optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = .Debug });
+    // const VERSION = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 0 };
+    const LIB_PATH = b.path("src/root.zig");
 
-    const lib = b.addStaticLibrary(.{
-        .name = "znwl",
-        // In this case the main source file is merely a path, however, in more
-        // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/root.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
+    // ========================================================================
+    //                             module
+    // ========================================================================
 
-    // This declares intent for the library to be installed into the standard
-    // location when the user invokes the "install" step (the default step when
-    // running `zig build`).
-    b.installArtifact(lib);
+    const module = b.addModule(NAME, .{ .root_source_file = LIB_PATH });
 
-    const exe = b.addExecutable(.{
-        .name = "znwl",
-        .root_source_file = .{ .path = "src/main.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
+    module.addImport("uuid", b.dependency("uuid", .{}).module("uuid"));
 
+    // Add platform specific dependencies
     switch (builtin.target.os.tag) {
-        // Windows OS dependencies
-        .windows => {
-            // Build without console
-            // exe.subsystem = .Windows;
-            exe.root_module.addImport(
+        Tag.windows => {
+            // Note: To build exe so a console window doesn't appear
+            // Add this to any exe build: `exe.subsystem = .Windows;`
+            module.addImport(
                 "win32",
                 // zigwin32 doesn't work well with target and optimize variables passed in
                 // this could change if the library updates after zig 0.12
@@ -198,64 +38,81 @@ pub fn build(b: *std.Build) void {
         else => {},
     }
 
-    // Add vulkan-zig dependency
-    exe.root_module.addImport(
-        "vulkan",
-        b.dependency("vulkan_zig", .{
-            .registry = @as([]const u8, b.pathFromRoot(".cache/vk.xml")),
-        }).module("vulkan-zig"),
-    );
+    try b.modules.put(b.dupe(NAME), module);
 
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    b.installArtifact(exe);
+    // ========================================================================
+    //                                  Tests
+    // ========================================================================
 
-    // This *creates* a Run step in the build graph, to be executed when another
-    // step is evaluated that depends on it. The next line below will establish
-    // such a dependency.
-    const run_cmd = b.addRunArtifact(exe);
-
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    // Creates a step for unit testing. This only builds the test executable
-    // but does not run it.
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/root.zig" },
+        .root_source_file = LIB_PATH,
         .target = target,
         .optimize = optimize,
     });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
-    const exe_unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
-    // Similar to creating the run step earlier, this exposes a `test` step to
-    // the `zig build --help` menu, providing a way for the user to request
-    // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
-    test_step.dependOn(&run_exe_unit_tests.step);
+
+    // ========================================================================
+    //                                 examples
+    // ========================================================================
+
+    const v4_example = addExample(b, module, "dev-example", "examples/dev.zig", target);
+
+    const run_dev_example = b.step("run-dev-example", "Run the dev example");
+    run_dev_example.dependOn(&v4_example.step);
+}
+
+fn addExample(b: *std.Build, uuid_module: *std.Build.Module, exeName: []const u8, sourceFile: []const u8, target: std.Build.ResolvedTarget) *std.Build.Step.Run {
+    const exe = b.addExecutable(.{
+        .name = exeName,
+        .root_source_file = b.path(sourceFile),
+        .target = target,
+    });
+    exe.root_module.addImport(NAME, uuid_module);
+    b.installArtifact(exe);
+
+    return b.addRunArtifact(exe);
+}
+
+/// Information to create and run an example.
+pub const Example = struct {
+    name: []const u8,
+    path: []const u8,
+    version: ?std.SemanticVersion = null,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode = .Debug,
+    module: *std.Build.Module,
+};
+
+/// Creates an example executable, installs it, and runs it.
+pub fn runExample(b: *std.Build, example: Example) void {
+    // Create an example executable
+    const runnable = b.addExecutable(.{
+        .name = example.name,
+        .target = example.target,
+        .optimize = example.optimize,
+        .version = example.version,
+        .root_source_file = b.path(example.path),
+    });
+
+    // Add the library as an available import in the example
+    runnable.root_module.addImport(NAME, example.module);
+    const example_run = b.addRunArtifact(runnable);
+
+    // Installs the example executables to the `zig-out/{EXAMPLES}` directory
+    const artifact = b.addInstallArtifact(runnable, .{ .dest_dir = .{ .override = .{ .custom = EXAMPLES } } });
+    b.getInstallStep().dependOn(&artifact.step);
+
+    // This allows the user to pass arguments to the application in the build
+    // command itself, like this: `zig build examples -- arg1 arg2 etc`
+    if (b.args) |args| {
+        example_run.addArgs(args);
+    }
+
+    // Adds the example run step to the default step's dependencies.
+    // This will run the example after the build completes.
+    b.default_step.dependOn(&example_run.step);
 }
