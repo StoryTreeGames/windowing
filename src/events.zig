@@ -155,7 +155,7 @@ const Converter = switch (builtin.target.os.tag) {
                     // Allow for resize cursor to be drawn if cursor is at correct position
                     // return windows_and_messaging.DefWindowProcW(hwnd, msg, wparam, lparam);
                 },
-                // Keyboard input evenets
+                // Keyboard input events
                 windows_and_messaging.WM_CHAR, windows_and_messaging.WM_SYSCHAR => {
                     const scan_code: u32 = @as(u32, @intCast(lparam >> 16)) & 0xFF;
                     const virtual_key: u32 = keyboard_and_mouse.MapVirtualKeyW(scan_code, windows_and_messaging.MAPVK_VSC_TO_VK);
@@ -193,12 +193,13 @@ const Converter = switch (builtin.target.os.tag) {
                     } else if (result < 0) {
                         std.log.debug("[{d}] Dead key detected", .{result});
                     } else {
-                        const data = std.unicode.utf16LeToUtf8Alloc(window.allocator, buffer[0..]) catch unreachable;
-                        defer window.allocator.free(data);
+                        var data: [4]u8 = [_]u8{0} ** 4;
+                        _ = std.unicode.utf16LeToUtf8(&data, buffer[0..]) catch unreachable;
+
                         if (data.len <= 4) {
                             return Event{
                                 .key_input = .{
-                                    .key = .{ .char = data[0..] },
+                                    .key = .{ .char = data },
                                     .modifiers = modifiers,
                                     .state = .pressed,
                                     .scan = scan_code,

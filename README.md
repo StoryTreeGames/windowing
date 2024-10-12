@@ -18,13 +18,13 @@ Hopefully this library will stay generic enough to be able to be used with most 
 
 **References**
 
-- [GLFW (C)](https://www.glfw.org/docs/3.3/window_guide.html)
+- [GLFW \(C\)](https://www.glfw.org/docs/3.3/window_guide.html)
 - [Winit (Rust)](https://github.com/rust-windowing/winit)
   - [windows::window](https://github.com/rust-windowing/winit/blob/4cd6877e8e19e7e1ba957a409394dca1af4afcdd/src/platform_impl/windows/window.rs#L432))
-- [CursorOption (Rust)](https://docs.rs/cursor-icon/latest/cursor_icon/)
+- [CursorOption \(Rust\)](https://docs.rs/cursor-icon/latest/cursor_icon/)
 
 
 ## TODO
 
-- [ ] Decouple event loop from window
-  - Windows are stored in event loop and the event loop distributes the windows events. This is needed because windows will distribute the events to the window and once that happens the event can't bubble back up to the event loop without bad code design
+- [ ] Fix keyboard input
+- [ ] Add gamepad, controller, joystick input
