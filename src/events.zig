@@ -330,7 +330,7 @@ pub fn EventLoop(State: type) type {
         /// Run the event/message loop which allows windows to recieve events
         pub fn run(self: *@This()) void {
             switch (builtin.target.os.tag) {
-                Tag.windows => {
+                .windows => {
                     const zig = @import("win32").zig;
                     const windows_and_messaging = @import("win32").ui.windows_and_messaging;
 

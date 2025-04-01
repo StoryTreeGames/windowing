@@ -31,8 +31,8 @@ const KF_REPEAT = windows_and_messaging.KF_REPEAT;
 const root = @import("../root.zig");
 const events = @import("../events.zig");
 const input = @import("../input.zig");
-const cursor = @import("../cursor.zig");
-const icon = @import("../icon.zig");
+const csr = @import("../cursor.zig");
+const ico = @import("../icon.zig");
 const window = @import("../window.zig");
 
 const Position = root.Position;
@@ -44,10 +44,10 @@ const ButtonState = events.ButtonState;
 
 const MouseButton = input.MouseButton;
 
-const CursorOption = cursor.CursorOption;
-const Cursor = cursor.Cursor;
-const IconOption = icon.IconOption;
-const Icon = icon.Icon;
+const CursorOption = csr.CursorOption;
+const Cursor = csr.Cursor;
+const IconOption = ico.IconOption;
+const Icon = ico.Icon;
 
 const Error = window.Error;
 const CreateOptions = window.CreateOptions;
@@ -92,7 +92,7 @@ pub fn format(value: Window, comptime _: []const u8, _: std.fmt.FormatOptions, w
 
 pub fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
     return switch (self.cursor) {
-        .icon => |i| windows_and_messaging.LoadCursorW(null, cursor.cursorToResource(i)),
+        .icon => |i| windows_and_messaging.LoadCursorW(null, csr.cursorToResource(i)),
         .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
             null,
             c.path.ptr,
@@ -111,7 +111,7 @@ pub fn getHCursor(self: *Window) ?windows_and_messaging.HCURSOR {
 
 fn getHIcon(self: *Window) ?windows_and_messaging.HICON {
     return switch (self.icon) {
-        .icon => |i| windows_and_messaging.LoadIconW(null, icon.iconToResource(i)),
+        .icon => |i| windows_and_messaging.LoadIconW(null, ico.iconToResource(i)),
         .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
             null,
             c.ptr,

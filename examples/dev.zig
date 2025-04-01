@@ -133,9 +133,9 @@ const State = struct {
 
 // TODO: How to make state optional?
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
     var state = State{};
     var event_loop = EventLoop(State).init(allocator, &state);
