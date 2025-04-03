@@ -41,5 +41,8 @@ pub fn main() !void {
     std.debug.print("Press <TAB> to toggle icon, cursor, and title at runtime\n", .{});
     std.debug.print("\x1b[1;33mWARNING\x1b[39m:\x1b[22m There are a lot of debug log statements \n\n", .{});
 
-    try event_loop.run();
+    while (event_loop.isActive()) {
+        _ = try event_loop.poll();
+    }
+    // try event_loop.run();
 }

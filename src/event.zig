@@ -280,9 +280,9 @@ pub const Event = union(enum) {
 pub fn EventLoop(S: type) type {
     return struct {
         arena: std.heap.ArenaAllocator,
-        windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
-        handler: EventHandler,
         state: *S,
+        handler: EventHandler,
+        windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
 
         pub fn init(allocator: std.mem.Allocator, state: *S) !*@This() {
             var arena = std.heap.ArenaAllocator.init(allocator);
@@ -314,6 +314,28 @@ pub fn EventLoop(S: type) type {
                 }
             };
 
+            if (@hasDecl(S, "setup")) {
+                const func = @field(S, "setup");
+                const F = @TypeOf(func);
+                const params = @typeInfo(F).@"fn".params;
+                const rtrn = @typeInfo(F).@"fn".return_type.?;
+
+                var args: std.meta.ArgsTuple(F) = undefined;
+                inline for (params, 0..) |param, i| {
+                    args[i] = switch (param.type.?) {
+                        *S, *const S => state,
+                        *@This(), *const @This() => el,
+                        else => @compileError("invalid event loop handler argument type: " ++ @typeName(S))
+                    };
+                }
+
+                if (@typeInfo(rtrn) == .error_union) {
+                    try @call(.auto, func, args);
+                } else {
+                    @call(.auto, func, args);
+                }
+            }
+
             return el;
         }
 
@@ -341,38 +363,28 @@ pub fn EventLoop(S: type) type {
             }
         }
 
-        pub fn run(self: *@This()) !void {
-            if (@hasDecl(S, "setup")) {
-                const func = @field(S, "setup");
-                const F = @TypeOf(func);
-                const params = @typeInfo(F).@"fn".params;
-                const rtrn = @typeInfo(F).@"fn".return_type.?;
+        pub fn isActive(self: *const @This()) bool {
+            return self.windows.count() > 0;
+        }
 
-                var args: std.meta.ArgsTuple(F) = undefined;
-                inline for (params, 0..) |param, i| {
-                    args[i] = switch (param.type.?) {
-                        *S, *const S => self.state,
-                        *@This(), *const @This() => self,
-                        else => @compileError("invalid event loop handler argument type: " ++ @typeName(S))
-                    };
-                }
+        pub fn poll(self: *@This()) !bool {
+            _ = self;
 
-                if (@typeInfo(rtrn) == .error_union) {
-                    try @call(.auto, func, args);
-                } else {
-                    @call(.auto, func, args);
-                }
+            switch (builtin.os.tag) {
+                .windows => {
+                    return try @import("windows/event.zig").EventLoop(S).pollMessages();
+                },
+                else => @compileError("platform not supported")
             }
+        }
 
+        pub fn run(self: *@This()) !void {
             switch (builtin.os.tag) {
                 .windows => {
                     try @import("windows/event.zig").EventLoop(S).messageLoop(self);
                 },
                 else => @compileError("platform not supported")
             }
-
-            // var win: Window = .{};
-            // try self.handleEvent(state, &win, .placeholder);
         }
 
         pub fn handleEvent(self: *@This(), state: *S, win: *Window, event: Event) !bool {
