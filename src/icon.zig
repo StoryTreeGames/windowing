@@ -1,9 +1,11 @@
 pub const Icon = union(enum) {
-    icon: IconOption,
+    icon: IconType,
     custom: []const u8,
+
+    pub const default: @This() = .{ .icon = .default };
 };
 
-pub const IconOption = enum {
+pub const IconType = enum {
     default,
     @"error",
     question,
@@ -25,7 +27,7 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
             return @ptrFromInt(value);
         }
 
-        pub fn iconToResource(icon: IconOption) [*:0]align(1) const u16 {
+        pub fn iconToResource(icon: IconType) [*:0]align(1) const u16 {
             @import("std").debug.print("{any}", .{wam.IDI_APPLICATION});
             return switch (icon) {
                 .default => wam.IDI_APPLICATION,
@@ -35,12 +37,6 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
                 .information => makeIntResourceW(wam.IDI_INFORMATION),
                 .security => wam.IDI_SHIELD,
             };
-        }
-    },
-    .linux => struct {
-        pub fn iconToResource(icon: IconOption) void {
-            _ = icon;
-            @import("std").debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux iconToResource", .{});
         }
     },
     else => @compileError("Unsupported operating system"),

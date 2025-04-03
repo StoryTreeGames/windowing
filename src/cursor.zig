@@ -1,5 +1,5 @@
 pub const Cursor = union(enum) {
-    icon: CursorOption,
+    icon: CursorType,
     custom: struct {
         /// Path to the image file
         path: []const u8,
@@ -8,15 +8,11 @@ pub const Cursor = union(enum) {
         /// The height of the cursor.
         height: i32 = 0,
     },
+
+    pub const default: @This() = .{ .icon = .default };
 };
 
-/// A cross-platform way of specifying a cursor icon. When a platform specific
-/// window loads a certain value of this enum it will translate it to a usable
-/// type.
-///
-/// Referenced from rust's cursor-icon crate.
-/// - https://github.com/rust-windowing/cursor-icon
-pub const CursorOption = enum {
+pub const CursorType = enum {
     default,
     pointer,
     crosshair,
@@ -58,7 +54,7 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
     .windows => struct {
         const wam = @import("win32").ui.windows_and_messaging;
 
-        pub fn cursorToResource(cursor: CursorOption) [*:0]align(1) const u16 {
+        pub fn cursorToResource(cursor: CursorType) [*:0]align(1) const u16 {
             return switch (cursor) {
                 .default => wam.IDC_ARROW,
                 .pointer => wam.IDC_HAND,
@@ -96,12 +92,6 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
                 .copy => wam.IDC_ARROW,
                 .zoom_in => wam.IDC_ARROW,
             };
-        }
-    },
-    .linux => struct {
-        pub fn cursorToResource(cursor: CursorOption) void {
-            _ = cursor;
-            @import("std").debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux cursorToResource", .{});
         }
     },
     else => |tag| @compileError("Unkown os " ++ @tagName(tag) ++ "; cursor not implemented"),

@@ -1,19 +1,3 @@
-// X11 Reference: https://www.cl.cam.ac.uk/~mgk25/ucs/keysymdef.h
-// Win32 Reference: https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
-
-// Winit Reference: https://github.com/rust-windowing/winit/blob/master/src/keyboard.rs#L1476
-const std = @import("std");
-
-pub const Modifiers = packed struct(u3) {
-    ctrl: bool = false,
-    alt: bool = false,
-    shift: bool = false,
-
-    pub fn eq(self: *const @This(), other: *const @This()) bool {
-        return @as(u3, @bitCast(self)) == @as(u3, @bitCast(other));
-    }
-};
-
 pub const Key = union(enum) {
     virtual: VirtualKey,
     char: [4]u8,
@@ -399,14 +383,6 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
                 0xFE => .oem_clear,
                 else => null,
             };
-        }
-    },
-    .linux => struct {
-        pub fn parseVirtualKey(wparam: usize, lparam: isize) ?VirtualKey {
-            _ = wparam;
-            _ = lparam;
-            @import("std").debug.print("\x1b[33;1mTODO\x1b[0m: Implement linux parseVirtualKey", .{});
-            return null;
         }
     },
     else => |tag| @compileError("Unsupported operating system: " ++ @tagName(tag) ++ "; input not implemented"),

@@ -20,11 +20,14 @@ pub fn build(b: *std.Build) !void {
 
     const module = b.addModule(NAME, .{ .root_source_file = b.path("src/root.zig") });
 
-    module.addImport("uuid", b.dependency("uuid", .{}).module("uuid"));
+    const zigwin32 = b.dependency("zigwin32", .{});
+    const uuid = b.dependency("uuid", .{});
+
+    module.addImport("uuid", uuid.module("uuid"));
     if (builtin.target.os.tag == .windows) {
         // Note: To build exe so a console window doesn't appear
         // Add this to any exe build: `exe.subsystem = .Windows;`
-        module.addImport("win32", b.dependency("zigwin32", .{}).module("win32"));
+        module.addImport("win32", zigwin32.module("win32"));
     }
 
     // ========================================================================
@@ -48,7 +51,9 @@ pub fn build(b: *std.Build) !void {
 
     inline for (examples) |example| {
         addExample(b, target, optimize, example, &[_]ModuleMap{
-            .{ NAME, module }
+            .{ NAME, module },
+            .{ "win32", zigwin32.module("win32") },
+            .{ "uuid", uuid.module("uuid") }
         });
     }
 }
