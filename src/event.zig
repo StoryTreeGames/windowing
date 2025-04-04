@@ -58,8 +58,8 @@ pub const MouseEvent = struct {
 
 /// Event corresponding to a size
 pub const SizeEvent = struct {
-    width: u16,
-    height: u16,
+    width: u32,
+    height: u32,
 };
 
 pub const Event = union(enum) {
@@ -262,8 +262,8 @@ pub const Event = union(enum) {
                         const size: usize = @intCast(lparam);
                         return Event{
                             .resize = .{
-                                .width = @truncate(size),
-                                .height = @truncate(size >> 16),
+                                .width = @intCast(@as(u16, @truncate(size))),
+                                .height = @intCast(@as(u16, @truncate(size >> 16))),
                             },
                         };
                     },

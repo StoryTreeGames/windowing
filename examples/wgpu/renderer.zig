@@ -1,5 +1,6 @@
 const win32 = @import("win32");
 const wgpu = @import("wgpu");
+const core = @import("storytree-core");
 
 const Renderer = @This();
 
@@ -9,17 +10,22 @@ queue: *wgpu.Queue,
 surface_config: wgpu.SurfaceConfiguration,
 pipeline: *wgpu.RenderPipeline,
 
-pub fn create(width: u32, height: u32, hinstance: win32.foundation.HINSTANCE, hwnd: win32.foundation.HWND) !Renderer {
+pub fn create(window: *core.Window) !Renderer {
     var self: Renderer = undefined;
 
     const instance = wgpu.Instance.create(null) orelse return error.CouldNotCreateInstance;
     defer instance.release();
 
-    self.surface = instance.createSurface(&wgpu.surfaceDescriptorFromWindowsHWND(.{
-        .label = "HWND_surface",
-        .hinstance = hinstance,
-        .hwnd = hwnd,
-    })) orelse return error.CouldNotCreateSurface;
+    self.surface = instance.createSurface(&switch (@import("builtin").os.tag) {
+        // On windows, the inner value of the window is the windows only data type that
+        // contains the HINSTANCE and HWND types that are to be used here.
+        .windows => wgpu.surfaceDescriptorFromWindowsHWND(.{
+            .label = "HWND_surface",
+            .hinstance = window.inner.instance.?,
+            .hwnd = window.inner.handle,
+        }),
+        else => @compileError("platform not supported")
+    }) orelse return error.CouldNotCreateSurface;
 
     const adapter_request = instance.requestAdapterSync(&wgpu.RequestAdapterOptions{
         .compatible_surface = self.surface,
@@ -43,10 +49,10 @@ pub fn create(width: u32, height: u32, hinstance: win32.foundation.HINSTANCE, hw
     var surface_capabilities: wgpu.SurfaceCapabilities = undefined;
     self.surface.getCapabilities(adapter, &surface_capabilities);
 
-    // TODO: Figure out if it's possible to get width/height from the window instead of having to pass them in.
+    const rect = window.getRect();
     self.surface_config = wgpu.SurfaceConfiguration {
-        .width = width,
-        .height = height,
+        .width = rect.width,
+        .height = rect.height,
         .format = surface_capabilities.formats[0],
         .device = self.device,
     };
@@ -96,6 +102,12 @@ pub fn create(width: u32, height: u32, hinstance: win32.foundation.HINSTANCE, hw
     return self;
 }
 
+pub fn resize(self: *Renderer, width: u32, height: u32) void {
+    self.surface_config.width = @max(width, 1);
+    self.surface_config.height = @max(height, 1);
+    self.surface.configure(&self.surface_config);
+}
+
 pub fn render(self: *Renderer) !void {
     var surface_texture: wgpu.SurfaceTexture = undefined;
     self.surface.getCurrentTexture(&surface_texture);
@@ -118,7 +130,7 @@ pub fn render(self: *Renderer) !void {
     const render_pass_color_attachments = &[_]wgpu.ColorAttachment {
         wgpu.ColorAttachment {
             .view = target_view,
-            .clear_value = wgpu.Color { .r = 0.9, .g = 0.1, .b = 0.2, .a = 1.0 },
+            .clear_value = wgpu.Color { .r = 0.9, .g = 0.1, .b = 0.2, .a = 0.0 },
         },
     };
 

@@ -72,7 +72,7 @@ pub fn restore(self: *const @This()) void {
 
 /// Get the windows current rect (bounding box)
 pub fn getRect(self: *const @This()) Rect(u32) {
-    self.inner.getRect();
+    return self.inner.getRect();
 }
 
 /// Set window title
