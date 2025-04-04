@@ -12,6 +12,10 @@
             .url = "git+https://github.com/r4gus/uuid-zig?ref=0.3.1#9d66e23e32cd7208d1becb4fd9352f8a27f89551",
             .hash = "uuid-0.3.0-oOieIYF1AAA_BtE7FvVqqTn5uEYTvvz7ycuVnalCOf8C",
         },
+        .wgpu_native_zig = .{
+            .url = "git+https://github.com/bronter/wgpu_native_zig?ref=v5.0.0#2012f51c16d29824ea15cc4db6e46fc5bb44e868",
+            .hash = "wgpu_native_zig-5.0.0-B9jeDOGZAgAkyePsJjgwsgHgo0guYS7S9cQqDcZx9kXL",
+        },
     },
     .paths = .{
         "src",

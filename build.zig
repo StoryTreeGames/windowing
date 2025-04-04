@@ -7,7 +7,7 @@ const EXAMPLES = "examples";
 
 const examples = [_]Example {
     .{ .name = "dev", .path = EXAMPLES ++ "/dev.zig",  },
-    .{ .name = "target", .path = EXAMPLES ++ "/target.zig",  },
+    .{ .name = "wgpu", .path = EXAMPLES ++ "/wgpu/main.zig",  },
 };
 
 pub fn build(b: *std.Build) !void {
@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) !void {
 
     const zigwin32 = b.dependency("zigwin32", .{});
     const uuid = b.dependency("uuid", .{});
+    const wgpu_native = b.dependency("wgpu_native_zig", .{});
 
     module.addImport("uuid", uuid.module("uuid"));
     if (builtin.target.os.tag == .windows) {
@@ -53,7 +54,8 @@ pub fn build(b: *std.Build) !void {
         addExample(b, target, optimize, example, &[_]ModuleMap{
             .{ NAME, module },
             .{ "win32", zigwin32.module("win32") },
-            .{ "uuid", uuid.module("uuid") }
+            .{ "uuid", uuid.module("uuid") },
+            .{ "wgpu", wgpu_native.module("wgpu") }
         });
     }
 }

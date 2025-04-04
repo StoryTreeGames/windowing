@@ -209,6 +209,7 @@ pub fn id(self: *const @This()) usize {
 
 pub fn destroy(self: *const @This()) void {
     _ = windows_and_messaging.DestroyWindow(self.handle);
+    _ = windows_and_messaging.UnregisterClassW(self.class, self.instance);
 }
 
 /// Minimize the window
