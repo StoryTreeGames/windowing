@@ -8,6 +8,7 @@ const EXAMPLES = "examples";
 const examples = [_]Example {
     .{ .name = "dev", .path = EXAMPLES ++ "/dev.zig",  },
     .{ .name = "wgpu", .path = EXAMPLES ++ "/wgpu/main.zig",  },
+    .{ .name = "dialog", .path = EXAMPLES ++ "/dialog.zig",  },
 };
 
 pub fn build(b: *std.Build) !void {
