@@ -1,14 +1,10 @@
 const builtin = @import("builtin");
 
 pub const Icon = enum {
-    exclamation,
     warning,
     information,
-    asterisk,
     question,
-    stop,
     @"error",
-    hand,
 };
 
 pub const Buttons = enum {
@@ -58,13 +54,13 @@ pub const Buttons = enum {
 fn Button(comptime buttons: ?Buttons) type {
     if (buttons) |btns| {
         return switch (btns) {
-            .abort_retry_ignore => Buttons.AbortRetryIgnore,
-            .cancel_try_continue => Buttons.CancelTryContinue,
+            .abort_retry_ignore => ?Buttons.AbortRetryIgnore,
+            .cancel_try_continue => ?Buttons.CancelTryContinue,
             .help, .ok => bool,
-            .ok_cancel => Buttons.OkCancel,
-            .retry_cancel => Buttons.RetryCancel,
+            .ok_cancel => ?Buttons.OkCancel,
+            .retry_cancel => ?Buttons.RetryCancel,
             .yes_no => Buttons.YesNo,
-            .yes_no_cancel => Buttons.YesNoCancel,
+            .yes_no_cancel => ?Buttons.YesNoCancel,
         };
     }
     return void;
@@ -74,7 +70,8 @@ pub const Util = switch (builtin.os.tag) {
     .windows => struct {
         const MESSAGEBOX_RESULT = @import("win32").ui.windows_and_messaging.MESSAGEBOX_RESULT;
 
-        pub fn processResult(comptime buttons: ?Buttons, result: MESSAGEBOX_RESULT) ?Button(buttons) {
+        pub fn processResult(comptime buttons: ?Buttons, result: MESSAGEBOX_RESULT) Button(buttons) {
+            @import("std").debug.print("{s}\n", .{ @tagName(result) });
             if (buttons) |btns| {
                 switch (btns) {
                     .abort_retry_ignore => switch (result) {
@@ -85,12 +82,12 @@ pub const Util = switch (builtin.os.tag) {
                     },
                     .cancel_try_continue => switch (result) {
                         .CANCEL => return Buttons.CancelTryContinue.cancel,
-                        .TRY => return Buttons.CancelTryContinue.@"try",
+                        .TRYAGAIN => return Buttons.CancelTryContinue.@"try",
                         .CONTINUE => return Buttons.CancelTryContinue.@"continue",
                         else => return null,
                     },
                     .help => switch (result) {
-                        .HELP => return true,
+                        .OK => return true,
                         else => return false,
                     },
                     .ok => switch (result) {
@@ -104,13 +101,12 @@ pub const Util = switch (builtin.os.tag) {
                     },
                     .retry_cancel => switch (result) {
                         .RETRY => return Buttons.RetryCancel.retry,
-                        .CANCEL => return Buttons.OkCancel.cancel,
+                        .CANCEL => return Buttons.RetryCancel.cancel,
                         else => return null,
                     },
                     .yes_no => switch (result) {
                         .YES => return Buttons.YesNo.yes,
-                        .NO => return Buttons.YesNo.no,
-                        else => return null,
+                        else => return Buttons.YesNo.no,
                     },
                     .yes_no_cancel => switch (result) {
                         .YES => return Buttons.YesNoCancel.yes,
@@ -132,7 +128,7 @@ pub const MessageOptions = struct {
     icon: ?Icon = null,
 };
 
-pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) ?Button(buttons) {
+pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) Button(buttons) {
     switch (builtin.os.tag) {
         .windows => {
             const win32 = @import("win32");
@@ -140,25 +136,21 @@ pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) ?Button(buttons
 
             const button_style: u32 = @bitCast(if (buttons) |btns| switch (btns) {
                 .abort_retry_ignore => wam.MB_ABORTRETRYIGNORE,
-                .cancel_try_continue => wam.MB_CANCELTRYCONTINUE,
+                .cancel_try_continue => wam.MB_CANCELTRYCONTINUE, // AD
                 .help => wam.MB_HELP,
                 .ok => wam.MB_OK,
-                .ok_cancel => wam.MB_OKCANCEL,
-                .retry_cancel => wam.MB_RETRYCANCEL,
+                .ok_cancel => wam.MB_OKCANCEL, // AD
+                .retry_cancel => wam.MB_RETRYCANCEL, // AD
                 .yes_no => wam.MB_YESNO,
-                .yes_no_cancel => wam.MB_YESNOCANCEL,
+                .yes_no_cancel => wam.MB_YESNOCANCEL, // AD
             }
             else wam.MESSAGEBOX_STYLE {});
 
             const icon_style: u32 = @bitCast(if (opts.icon) |ico| switch (ico) {
-                .exclamation => wam.MB_ICONEXCLAMATION,
                 .warning => wam.MB_ICONWARNING,
                 .information => wam.MB_ICONINFORMATION,
-                .asterisk => wam.MB_ICONASTERISK,
                 .question => wam.MB_ICONQUESTION,
-                .stop => wam.MB_ICONSTOP,
                 .@"error" => wam.MB_ICONERROR,
-                .hand => wam.MB_ICONHAND,
             }
             else wam.MESSAGEBOX_STYLE {});
 
