@@ -70,6 +70,10 @@ pub const Util = switch (builtin.os.tag) {
     .windows => struct {
         const MESSAGEBOX_RESULT = @import("win32").ui.windows_and_messaging.MESSAGEBOX_RESULT;
 
+        pub const shobjidl = @cImport({
+            @cInclude("shobjidl.h");
+        });
+
         pub fn processResult(comptime buttons: ?Buttons, result: MESSAGEBOX_RESULT) Button(buttons) {
             @import("std").debug.print("{s}\n", .{ @tagName(result) });
             if (buttons) |btns| {
@@ -165,4 +169,13 @@ pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) Button(buttons)
         else => @compileError("platform not supported"),
     }
     return null;
+}
+
+pub const FileOptions = struct {
+
+};
+
+pub fn file(opts: FileOptions) void {
+    @import("std").debug.print("{s}\n", .{ @typeName(Util.shobjidl.IFileDialog) });
+    _ = opts;
 }
