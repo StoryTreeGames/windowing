@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) !void {
     //                             module
     // ========================================================================
 
-    const module = b.addModule(NAME, .{ .root_source_file = b.path("src/root.zig") });
+    const module = b.addModule(NAME, .{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
 
     const zigwin32 = b.dependency("zigwin32", .{});
     const uuid = b.dependency("uuid", .{});

@@ -8,5 +8,5 @@ pub fn main() !void {
     //     .message = "Hello, world!"
     // });
     // std.debug.print("{any}\n", .{ result });
-    core.dialog.file(.{});
+    try core.dialog.file(.{});
 }
