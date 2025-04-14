@@ -1,3 +1,4 @@
+const std = @import("std");
 const builtin = @import("builtin");
 
 pub const Icon = enum {
@@ -71,7 +72,6 @@ pub const Util = switch (builtin.os.tag) {
         const MESSAGEBOX_RESULT = @import("win32").ui.windows_and_messaging.MESSAGEBOX_RESULT;
 
         pub fn processResult(comptime buttons: ?Buttons, result: MESSAGEBOX_RESULT) Button(buttons) {
-            @import("std").debug.print("{s}\n", .{ @tagName(result) });
             if (buttons) |btns| {
                 switch (btns) {
                     .abort_retry_ignore => switch (result) {
@@ -167,63 +167,89 @@ pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) Button(buttons)
     return null;
 }
 
-pub const FileOptions = struct {
-    // /// The default file extension to add to the returned file name when a file extension
-    // /// is not entered. Note that if this is not set no extensions will be present on returned
-    // /// filenames even when a specific file type filter is selected.
-    // pub default_extension: &'a str,
-    // /// The path to the default folder that the dialog will navigate to on first usage. Subsequent
-    // /// usages of the dialog will remember the directory of the last selected file/folder.
-    // pub default_folder: &'a str,
-    // /// The filename to pre-populate in the dialog box
-    // pub file_name: &'a str,
-    // /// The label to display to the left of the filename input box in the dialog
-    // pub file_name_label: &'a str,
-    // /// Specifies the (1-based) index of the file type that is selected by default.
-    // pub file_type_index: u32,
-    // /// The file types that are displayed in the File Type dropdown box in the dialog. The first
-    // /// element is the text description, i.e `"Text Files (*.txt)"` and the second element is the
-    // /// file extension filter pattern, with multiple entries separated by a semi-colon
-    // /// i.e `"*.txt;*.log"`
-    // pub file_types: Vec<(&'a str, &'a str)>,
-    // /// The path to the folder that is always selected when a dialog is opened, regardless of
-    // /// previous user action. This is not recommended for general use, instead `default_folder`
-    // /// should be used.
-    // pub folder: &'a str,
-    // /// The text label to replace the default "Open" or "Save" text on the "OK" button of the dialog
-    // pub ok_button_label: &'a str,
-    // /// A set of bit flags to apply to the dialog. Setting invalid flags will result in the dialog
-    // /// failing to open. Flags should be a combination of `FOS_*` constants, the documentation for
-    // /// which can be found [here](https://docs.microsoft.com/en-us/windows/win32/api/shobjidl_core/ne-shobjidl_core-_fileopendialogoptions)
-    // pub options: u32,
-    // /// The HWND of the window that the dialog will be owned by. If not provided the dialog will be
-    // /// an independent top-level window.
-    // pub owner: Option<HWND>,
-    // /// The path to the existing file to use when opening a Save As dialog. Acts as a combination of
-    // /// `folder` and `file_name`, displaying the file name in the edit box, and selecting the
-    // /// containing folder as the initial folder in the dialog.
-    // pub save_as_item: &'a str,
-    // /// The text displayed in the title bar of the dialog box
-    // pub title: &'a str
+fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: anytype) !void {
+    switch (builtin.os.tag) {
+        .windows => {
+            const util = @import("windows/util.zig");
+
+            if (options.folder.len > 0) {
+                const path = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.folder);
+                var default_folder: ?*anyopaque = null;
+
+                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.uuidof(), &default_folder);
+                if (result != util.S_OK) return error.Win32Error;
+
+                const folder = if (default_folder) |df| @as(*util.shobjidl.IShellItem, @ptrCast(@alignCast(df))) else null; 
+                try dialog.setFolder(folder);
+            }
+
+            if (options.file_name.len > 0) {
+                const path = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.file_name);
+                try dialog.setFileName(path.ptr);
+            }
+
+            if (options.filters.len > 0) {
+                try addFileDialogFilters(allocator, dialog, options.filters);
+            }
+
+            if (options.title.len > 0) {
+                const title = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.title);
+                try dialog.setTitle(title.ptr);
+            }
+        },
+        else => @compileError("platform not supported")
+    }
+}
+
+fn addFileDialogFilters(allocator: std.mem.Allocator, dialog: anytype, types: []const std.meta.Tuple(&.{ []const u8, []const u8 })) !void {
+    switch(builtin.os.tag) {
+        .windows => {
+            const util = @import("windows/util.zig");
+            const filters = try allocator.alloc(util.shobjidl.COMDLG_FILTERSPEC, types.len);
+            for (types, 0..) |filter, i| {
+                const name = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[0]);
+                const spec = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[1]);
+                filters[i] = util.shobjidl.COMDLG_FILTERSPEC {
+                    .pszName = name.ptr,
+                    .pszSpec = spec.ptr,
+                };
+            }
+            try dialog.setFileTypes(filters);
+        },
+        else => @compileError("platform not supported")
+    }
+}
+
+pub const FileOpenDialogOptions = struct {
+    directory: bool = false,
+    multiple: bool = false,
+    exists: bool = true,
+    show_pinned: bool = true,
+    show_hidden: bool = false,
+    /// The HWND of the window that the dialog will be owned by. If not provided the dialog will be
+    /// an independent top-level window.
+    owner: ?*anyopaque = null,
+    /// The text displayed in the title bar of the dialog box
+    title: []const u8 = "",
+    /// The path to the folder that is always selected when a dialog is opened, regardless of
+    /// previous user action. This is not recommended for general use, instead `default_folder`
+    /// should be used.
+    folder: []const u8 = "",
+    /// The file types that are displayed in the File Type dropdown box in the dialog. The first
+    /// element is the text description, i.e `"Text Files (*.txt)"` and the second element is the
+    /// file extension filter pattern, with multiple entries separated by a semi-colon
+    /// i.e `"*.txt;*.log"`
+    filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{ .{ "All types (*.*)", "*.*" } },
+    /// The filename to pre-populate in the dialog box
+    file_name: []const u8 = "",
 };
 
-// DialogParams {
-//     default_extension: "",
-//     default_folder: "",
-//     file_name: "",
-//     file_name_label: "",
-//     file_type_index: 1,
-//     file_types: vec![("All types (*.*)", "*.*")],
-//     folder: "",
-//     ok_button_label: "",
-//     options: 0,
-//     owner: None,
-//     save_as_item: "",
-//     title: "",
-// }
+/// Caller is responsible for freeing the returned array of strings
+pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const []const u8 {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const allo = arena.allocator();
 
-pub fn file(opts: FileOptions) !void {
-    _ = opts;
     switch (builtin.os.tag) {
         .windows => {
             const util = @import("windows/util.zig");
@@ -234,17 +260,138 @@ pub fn file(opts: FileOptions) !void {
             }) != util.S_OK) return error.CoInitializeFailure;
             defer util.CoUninitialize();
 
-            var file_save_dialog: util.IFileSaveDialog = undefined;
+            var file_open_dialog: util.IFileDialog(.open) = undefined;
+            if (util.CoCreateInstance(
+                &util.CLSID_FileOpenDialog(),
+                null,
+                util.CLSCTX_ALL,
+                &util.IFileDialog(.open).uuidof(),
+                &file_open_dialog.inner
+            ) != util.S_OK) return error.CoCreateInstanceFailure;
+
+            try configureFileDialog(allo, &file_open_dialog, opts);
+
+            var options = try file_open_dialog.getOptions();
+            options.pick_folders = opts.directory;
+            options.allow_multi_select = opts.multiple;
+            if (opts.directory)
+                options.path_must_exist = opts.exists
+            else
+                options.file_must_exist = opts.exists;
+            options.hide_pinned_places = !opts.show_pinned;
+            options.force_show_hidden = opts.show_hidden;
+            try file_open_dialog.setOptions(@bitCast(options));
+
+            file_open_dialog.show(null) catch |e| switch (e) {
+                error.UserCancelled => return null,
+                else => return e
+            };
+
+            var out = std.ArrayList([]const u8).init(allocator);
+            var shell_items = try file_open_dialog.getResults();
+            for (0..try shell_items.count()) |i| {
+                if (try shell_items.get(i)) |item| {
+                    defer item.release() catch {};
+
+                    const attrs = try item.getAttributes(util.SFGAO_FILESYSTEM);
+                    if (attrs & util.SFGAO_FILESYSTEM == 0) {
+                        continue;
+                    }
+
+                    if (try item.getDisplayName()) |name| {
+                        defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
+                        const n = try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
+                        try out.append(n);
+                    }
+                }
+            }
+
+            return try out.toOwnedSlice();
+        },
+        else => @compileError("platform not supported")
+    }
+}
+
+pub const FileSaveDialogOptions = struct {
+    show_pinned: bool = true,
+    show_hidden: bool = false,
+    prompt_on_create: bool = false,
+    save_as: []const u8 = "",
+    /// The HWND of the window that the dialog will be owned by. If not provided the dialog will be
+    /// an independent top-level window.
+    owner: ?*anyopaque = null,
+    /// The text displayed in the title bar of the dialog box
+    title: []const u8 = "",
+    /// The path to the folder that is always selected when a dialog is opened, regardless of
+    /// previous user action. This is not recommended for general use, instead `default_folder`
+    /// should be used.
+    folder: []const u8 = "",
+    /// The file types that are displayed in the File Type dropdown box in the dialog. The first
+    /// element is the text description, i.e `"Text Files (*.txt)"` and the second element is the
+    /// file extension filter pattern, with multiple entries separated by a semi-colon
+    /// i.e `"*.txt;*.log"`
+    filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{ .{ "All types (*.*)", "*.*" } },
+    /// The filename to pre-populate in the dialog box
+    file_name: []const u8 = "",
+};
+
+pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const u8 {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const allo = arena.allocator();
+
+    switch (builtin.os.tag) {
+        .windows => {
+            const util = @import("windows/util.zig");
+
+            if (util.CoInitializeEx(null, .{
+                .apartment_threaded = true,
+                .disable_ole1dde = true,
+            }) != util.S_OK) return error.CoInitializeFailure;
+            defer util.CoUninitialize();
+
+            var file_save_dialog: util.IFileDialog(.save) = undefined;
             if (util.CoCreateInstance(
                 &util.CLSID_FileSaveDialog(),
                 null,
                 util.CLSCTX_ALL,
-                &util.IFileSaveDialog.uuidof(),
+                &util.IFileDialog(.save).uuidof(),
                 &file_save_dialog.inner
             ) != util.S_OK) return error.CoCreateInstanceFailure;
 
-            try file_save_dialog.show(null);
-            // TODO: Configure the file dialog
+            if (opts.save_as.len > 0) {
+                const path = try std.unicode.utf8ToUtf16LeAllocZ(allo, opts.save_as);
+                var save_as_item: ?*anyopaque = null;
+
+                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.uuidof(), &save_as_item);
+                if (result != util.S_OK) return error.Win32Error;
+
+                if (save_as_item) |df| {
+                    try file_save_dialog.setSaveAs(@as(*util.shobjidl.IShellItem, @ptrCast(@alignCast(df))));
+                }
+            }
+
+            try configureFileDialog(allo, &file_save_dialog, opts);
+
+            var options = try file_save_dialog.getOptions();
+            options.hide_pinned_places = !opts.show_pinned;
+            options.force_show_hidden = opts.show_hidden;
+            options.create_prompt = opts.prompt_on_create;
+            try file_save_dialog.setOptions(@bitCast(options));
+
+            file_save_dialog.show(null) catch |e| switch (e) {
+                error.UserCancelled => return null,
+                else => return e
+            };
+
+            const item = try file_save_dialog.getResult() orelse return null;
+            defer item.release() catch {};
+
+            if (try item.getDisplayName()) |name| {
+                defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
+                return try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
+            }
+            return null;
         },
         else => @compileError("platform not supported")
     }
