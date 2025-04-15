@@ -1,6 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+const Color = @import("./root.zig").Color;
+const Font = @import("./root.zig").Font;
+
 pub const Icon = enum {
     warning,
     information,
@@ -128,6 +131,8 @@ pub const MessageOptions = struct {
     icon: ?Icon = null,
 };
 
+// TODO: Can this be converted into a generic dialog where custom elements can be added?
+// Additions would include progress bar, dropdown, etc.
 pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) Button(buttons) {
     switch (builtin.os.tag) {
         .windows => {
@@ -392,6 +397,99 @@ pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const
                 return try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
             }
             return null;
+        },
+        else => @compileError("platform not supported")
+    }
+}
+
+pub const ColorOptions = struct {
+    owner: ?*anyopaque = null,
+    initial: Color = .{ .red = 200, .green = 100, .blue = 100 },
+    custom: ?*[16]Color = null,
+};
+
+pub fn color(options: ColorOptions) !?Color {
+    switch (builtin.os.tag) {
+        .windows => {
+            const util = @import("windows/util.zig");
+            var default_custom: [16]Color = [_]Color{ .white } ** 16;
+
+            var cc: util.CHOOSECOLORA = std.mem.zeroes(util.CHOOSECOLORA);
+            cc.lStructSize = @sizeOf(util.CHOOSECOLORA);
+            cc.hwndOwner = @ptrCast(@alignCast(options.owner));
+            cc.lpCustColors = if (options.custom) |custom| custom[0..].ptr else default_custom[0..].ptr;
+            cc.rgbResult = options.initial;
+            cc.Flags = .{ .rgb_init = true, .full_open = true };
+
+            if (util.ChooseColorA(&cc) != util.TRUE) {
+                const err = util.CommDlgExtendedError();
+                _ = std.meta.intToEnum(util.CDERR, err) catch return null;
+                return error.UnknownError;
+            }
+            return @bitCast(cc.rgbResult);
+        },
+        else => @compileError("platform not supported")
+    }
+}
+
+pub const FontOptions = struct {
+    owner: ?*anyopaque = null,
+    color: Color = .{},
+    face: []const u8 = "Arial",
+    style: []const u8 = "Regular",
+    point_size: i16 = 12,
+};
+
+/// Caller is responsible for freeing the returned `Font.name`
+pub fn font(allocator: std.mem.Allocator, options: FontOptions) !?Font {
+    switch (builtin.os.tag) {
+        .windows => {
+            const util = @import("windows/util.zig");
+
+            const style = try allocator.allocSentinel(u8, options.style.len, 0);
+            @memcpy(style, options.style);
+            defer allocator.free(style);
+
+            var face_name: [32:0]u8 = std.mem.zeroes([32:0]u8);
+            for (options.face[0..@min(options.face.len, 32)], 0..) |f, i| {
+                face_name[i] = f;
+            }
+
+            var lf: util.LOGFONTA = std.mem.zeroes(util.LOGFONTA);
+            const caps = util.GetDeviceCaps(util.GetDC(null), .LOGPIXELSY);
+            lf.height = @intFromFloat(@round(@as(f32, @floatFromInt(options.point_size)) * @as(f32, @floatFromInt(caps)) / 72.0));
+            lf.face_name = face_name;
+
+            var cf: util.CHOOSEFONTA = std.mem.zeroes(util.CHOOSEFONTA);
+            cf.lStructSize = @sizeOf(util.CHOOSEFONTA) + 8;
+            cf.lpLogFont = &lf;
+            cf.hwndOwner = @ptrCast(@alignCast(options.owner));
+            cf.lpszStyle = style.ptr;
+            cf.rgbColors = @bitCast(options.color);
+            cf.iPointSize = options.point_size;
+            cf.Flags = .{ .screen_fonts = true, .effects = true, .init_to_log_font_struct = true, .use_style = true };
+
+            if (util.ChooseFontA(&cf) == util.FALSE) {
+                const err = util.CommDlgExtendedError();
+                _ = std.meta.intToEnum(util.CDERR, err) catch return null;
+                return error.UnknownError;
+            }
+
+            const name_slice: []const u8 = std.mem.sliceTo(lf.face_name[0..], 0);
+            const name = try allocator.alloc(u8, name_slice.len);
+            @memcpy(name, name_slice);
+
+            return .{
+                .height = @intCast(@abs(lf.height)),
+                .width = @intCast(@abs(lf.width)),
+                .point_size = @intFromFloat(@round(@as(f32, @floatFromInt(@abs(lf.height))) * 72.0 / @as(f32, @floatFromInt(caps)))),
+                .color = @bitCast(cf.rgbColors),
+                .weight = @intCast(lf.weight),
+                .italic = lf.italic == 1,
+                .underline = lf.underline == 1,
+                .strikeout = lf.strikeout == 1,
+                .name = name,
+            };
         },
         else => @compileError("platform not supported")
     }

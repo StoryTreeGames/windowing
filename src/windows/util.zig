@@ -1,5 +1,6 @@
 const std = @import("std");
 const uuid = @import("uuid");
+const Color = @import("../root.zig").Color;
 
 pub const shobjidl = @cImport({
     @cInclude("shobjidl.h");
@@ -9,6 +10,13 @@ pub const combaseapi = @cImport({
 });
 
 pub const HWND = @import("win32").foundation.HWND;
+pub const HDC = @import("win32").graphics.gdi.HDC;
+pub const GetDeviceCaps = @import("win32").graphics.gdi.GetDeviceCaps;
+pub const GetDC = @import("win32").graphics.gdi.GetDC;
+pub const HINSTANCE = @import("win32").foundation.HINSTANCE;
+pub const BOOL = @import("win32").foundation.BOOL;
+pub const TRUE = @import("win32").zig.TRUE;
+pub const FALSE = @import("win32").zig.FALSE;
 pub const HRESULT = @import("win32").foundation.HRESULT;
 pub const Win32Error = std.os.windows.Win32Error;
 pub const S_OK = shobjidl.S_OK;
@@ -98,6 +106,212 @@ pub const GUID = extern struct {
     }
 };
 
+pub const CC = packed struct(u32) {
+    rgb_init: bool = false,
+    full_open: bool = false,
+    prevent_full_open: bool = false,
+    show_help: bool = false,
+    enable_hook: bool = false,
+    enable_template: bool = false,
+    enable_template_handle: bool = false,
+    solid_color: bool = false,
+    any_color: bool = false,
+    _m: u23 = 0,
+};
+
+pub const CHOOSECOLORA = extern struct {
+    lStructSize: u32 = 0,
+    hwndOwner: shobjidl.HWND = null,
+    hInstance: shobjidl.HWND = null,
+    rgbResult: Color = .{},
+    lpCustColors: ?[*]Color = null,
+    // Flags: u32 = 0,
+    Flags: CC = .{},
+    lCustData: isize = 0,
+    lpfnHook: shobjidl.LPCCHOOKPROC = null,
+    lpTemplateName: ?[*]const u8 = null,
+};
+
+pub const LOGFONTA = extern struct {
+    height: i32 = @import("std").mem.zeroes(i32),
+    width: i32 = @import("std").mem.zeroes(i32),
+    escapement: i32 = @import("std").mem.zeroes(i32),
+    orientation: i32 = @import("std").mem.zeroes(i32),
+    weight: i32 = @import("std").mem.zeroes(i32),
+    italic: u8 = @import("std").mem.zeroes(u8),
+    underline: u8 = @import("std").mem.zeroes(u8),
+    strikeout: u8 = @import("std").mem.zeroes(u8),
+    charset: CharSet = @import("std").mem.zeroes(CharSet),
+    out_precision: OutPrecision = @import("std").mem.zeroes(OutPrecision),
+    clip_precision: Clip = @import("std").mem.zeroes(Clip),
+    quality: Quality = @import("std").mem.zeroes(Quality),
+    pitch_and_family: PitchAndFamily = @import("std").mem.zeroes(PitchAndFamily),
+    face_name: [32:0]u8 = @import("std").mem.zeroes([32:0]u8),
+};
+
+pub const CharSet = enum(u8) {
+    ansi = 0,
+    default = 1,
+    symbol = 2,
+    shiftjis = 128,
+    hangeul = 129,
+    gb2312 = 134,
+    chinesebig5 = 136,
+    oem = 255,
+    johab = 130,
+    hebrew = 177,
+    arabic = 178,
+    greek = 161,
+    turkish = 162,
+    vietnamese = 163,
+    thai = 222,
+    easteurope = 238,
+    russian = 204,
+    mac = 77,
+    baltic = 186,
+};
+
+pub const Quality = enum(u8) {
+    default = 0,
+    draft = 1,
+    proof = 2,
+    non_antialiased = 3,
+    antialiased = 4,
+    clear_type = 5,
+    clear_type_natural = 6,
+};
+
+pub const Pitch = enum(u2) {
+    default = 0,
+    fixed = 1,
+    variable = 2,
+};
+
+pub const Family = enum(u6) {
+    dont_care = 0,
+    roman = 1,
+    swiss = 2,
+    modern = 3,
+    script = 4,
+    decorative = 5,
+};
+
+pub const OutPrecision = enum(u8) {
+    default = 0,
+    string = 1,
+    stroke = 3,
+    tt = 4,
+    device = 5,
+    raster = 6,
+    tt_only = 7,
+    outline = 8,
+    ps_only = 10,
+};
+
+pub const PitchAndFamily = packed struct(u8) {
+    pitch: Pitch,
+    family: Family
+};
+
+/// character  : 0000 0001
+/// stroke     : 0000 0010
+/// lh_angles  : 0001 0000
+/// dfa_disabel: 0100 0000
+/// embedded   : 1000 0000
+pub const Clip = packed struct(u8) {
+    character: bool = false,
+    stroke: bool = false,
+    _1: u2 = 0,
+    lh_angles: bool = false,
+    _2: u1 = 0,
+    dfa_disable: bool = false,
+    embedded: bool = false,
+};
+
+pub const CHOOSEFONTA = extern struct {
+    lStructSize: u32 = 0,
+    hwndOwner: shobjidl.HWND = null,
+    hDC: shobjidl.HDC = null,
+    lpLogFont: ?*LOGFONTA = null,
+    iPointSize: i16 = 0,
+    Flags: CF = .{},
+    rgbColors: Color = .{},
+    lCustData: isize = 0,
+    lpfnHook: shobjidl.LPCFHOOKPROC = null,
+    lpTemplateName: ?[*:0]const u8 = null,
+    hInstance: shobjidl.HINSTANCE = null,
+    lpszStyle: ?[*:0]const u8 = null,
+    nFontType: u16 = 0,
+    ___MISSING_ALIGNMENT__: u16 = 0, 
+    nSizeMin: i16 = 0,
+    nSizeMax: i16 = 0,
+};
+
+pub const FontType = packed struct(u16) {
+    _1: u8 = 0,
+    bold: bool = false,
+    italic: bool = false,
+    regular: bool = false,
+    _2: u2 = 0,
+    screen: bool = false,
+    printer: bool = false,
+    simulated: bool = false,
+};
+
+pub const CF = packed struct(u32) {
+    pub const both: @This() = .{ .screen_fonts = true,  .printer_fonts = true };
+    pub const scripts_only: @This() = .{ .ansi_only = true };
+    pub const no_oemfonts = .{ .no_vector_fonts };
+
+    screen_fonts: bool = false,
+    printer_fonts: bool = false,
+    show_help: bool = false,
+    enable_hook: bool = false,
+    enable_template: bool = false,
+    enable_template_handle: bool = false,
+    init_to_log_font_struct: bool = false,
+    use_style: bool = false,
+    effects: bool = false,
+    apply: bool = false,
+    ansi_only: bool = false,
+    no_vector_fonts: bool = false,
+    no_simulations: bool = false,
+    limit_size: bool = false,
+    fixed_pitch_only: bool = false,
+    wysiwyg: bool = false,
+    force_font_exist: bool = false,
+    scalable_only: bool = false,
+    tt_only: bool = false,
+    no_face_sel: bool = false,
+    no_style_sel: bool = false,
+    no_size_sel: bool = false,
+    select_script: bool = false,
+    no_script_sel: bool = false,
+    no_vert_fonts: bool = false,
+    inactive_fonts: bool = false,
+
+    _m: u6 = 0,
+};
+
+pub const CDERR = enum(u32) {
+    CDERR_DIALOGFAILURE = 0xFFFF,
+    CDERR_FINDRESFAILURE = 0x0006,
+    CDERR_INITIALIZATION = 0x0002,
+    CDERR_LOADRESFAILURE = 0x0007,
+    CDERR_LOADSTRFAILURE = 0x0005,
+    CDERR_LOCKRESFAILURE = 0x0008,
+    CDERR_MEMALLOCFAILURE = 0x0009,
+    CDERR_MEMLOCKFAILURE = 0x000A,
+    CDERR_NOHINSTANCE = 0x0004,
+    CDERR_NOHOOK = 0x000B,
+    CDERR_NOTEMPLATE = 0x0003,
+    CDERR_REGISTERMSGFAIL = 0x000C,
+    CDERR_STRUCTSIZE = 0x0001,
+};
+
+pub extern "comdlg32" fn ChooseColorA(*CHOOSECOLORA) BOOL;
+pub extern "comdlg32" fn ChooseFontA(*CHOOSEFONTA) BOOL;
+pub extern "comdlg32" fn CommDlgExtendedError() u32;
 pub extern "shell32" fn SHCreateItemFromParsingName(pszPath: [*]const u16, pbc: ?*opaque{}, riid: *const GUID, ppv: *?*anyopaque) HRESULT;
 pub extern "ole32" fn CoCreateInstance(rclsid: *const GUID, pUnkOuter: ?*IUnknown, dwClsContext: u32, riid: *const GUID, ppv: *?*anyopaque) HRESULT;
 pub extern "ole32" fn CoInitializeEx(pvReserved: ?*anyopaque, dwCoInit: CoInit) HRESULT;
