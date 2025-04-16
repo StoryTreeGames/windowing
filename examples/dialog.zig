@@ -60,9 +60,9 @@ pub fn main() !void {
         const result = try core.dialog.font(allocator, .{});
         if (result) |font| {
             defer allocator.free(font.name);
-            std.debug.print("Font Name: {s}\n", .{ font.name });
-            std.debug.print("Weight: {d}\n", .{ font.weight });
-            std.debug.print("Point Size: {d}\n", .{ font.point_size });
+            std.debug.print("{{\n  Font Name: {s}\n", .{ font.name });
+            std.debug.print("  Weight: {d}\n", .{ font.weight });
+            std.debug.print("  Point Size: {d}\n}}\n", .{ font.point_size });
         } else {
             std.debug.print("No Font Selected\n", .{});
         }

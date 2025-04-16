@@ -1,153 +1,93 @@
 const std = @import("std");
 const uuid = @import("uuid");
+const win32 = @import("win32");
+
 const Color = @import("../root.zig").Color;
 
-pub const shobjidl = @cImport({
-    @cInclude("shobjidl.h");
-});
-pub const combaseapi = @cImport({
-    @cInclude("combaseapi.h");
-});
+pub const HDC = win32.graphics.gdi.HDC;
+pub const GetDC = win32.graphics.gdi.GetDC;
+pub const GetDeviceCaps = win32.graphics.gdi.GetDeviceCaps;
 
-pub const HWND = @import("win32").foundation.HWND;
-pub const HDC = @import("win32").graphics.gdi.HDC;
-pub const GetDeviceCaps = @import("win32").graphics.gdi.GetDeviceCaps;
-pub const GetDC = @import("win32").graphics.gdi.GetDC;
-pub const HINSTANCE = @import("win32").foundation.HINSTANCE;
-pub const BOOL = @import("win32").foundation.BOOL;
-pub const TRUE = @import("win32").zig.TRUE;
-pub const FALSE = @import("win32").zig.FALSE;
-pub const HRESULT = @import("win32").foundation.HRESULT;
+pub const HWND = win32.foundation.HWND;
+pub const HINSTANCE = win32.foundation.HINSTANCE;
+pub const BOOL = win32.foundation.BOOL;
+pub const HRESULT = win32.foundation.HRESULT;
+
+pub const PROPERTYKEY = win32.ui.shell.properties_system.PROPERTYKEY;
+pub const IPropertyStore = win32.ui.shell.properties_system.IPropertyStore;
+pub const IPropertyDescriptionList = win32.ui.shell.properties_system.IPropertyDescriptionList;
+pub const GETPROPERTYSTOREFLAGS = win32.ui.shell.properties_system.GETPROPERTYSTOREFLAGS;
+pub const COMDLG_FILTERSPEC = win32.ui.shell.common.COMDLG_FILTERSPEC;
+
+pub const TRUE = win32.zig.TRUE;
+pub const FALSE = win32.zig.FALSE;
+pub const Guid = win32.zig.Guid;
+
+pub const CoInit = win32.system.com.COINIT;
+pub const IBindCtx = win32.system.com.IBindCtx;
+pub const IUnknown = win32.system.com.IUnknown;
+pub const PROPVARIANT = win32.system.com.structured_storage.PROPVARIANT;
+pub const CLSCTX_ALL = win32.system.com.CLSCTX_ALL;
+pub const CoInitializeEx = win32.system.com.CoInitializeEx;
+pub const CoUninitialize = win32.system.com.CoUninitialize;
+pub const CoTaskMemFree = win32.system.com.CoTaskMemFree;
+pub const CoCreateInstance = win32.system.com.CoCreateInstance;
+
+pub const RoInitialize = win32.system.win_rt.RoInitialize;
+pub const RoUninitialize = win32.system.win_rt.RoUninitialize;
+
+pub const CHOOSECOLORA = win32.ui.controls.dialogs.CHOOSECOLORA;
+pub const LOGFONTA = win32.graphics.gdi.LOGFONTA;
+pub const CHOOSEFONTA = win32.ui.controls.dialogs.CHOOSEFONTA;
+pub const CommDlgExtendedError = win32.ui.controls.dialogs.CommDlgExtendedError;
+pub const ChooseFontA = win32.ui.controls.dialogs.ChooseFontA;
+pub const ChooseColorA = win32.ui.controls.dialogs.ChooseColorA;
+
 pub const Win32Error = std.os.windows.Win32Error;
-pub const S_OK = shobjidl.S_OK;
-pub const S_FALSE = shobjidl.S_FALSE;
-pub const IUnknown = combaseapi.IUnknown;
+pub const S_OK: HRESULT = 0;
+pub const S_FALSE: HRESULT = 1;
+pub const SIGDN_FILESYSPATH: i32 = -2147123200;
+pub const SFGAO_FILESYSTEM: i32 = 0x40000000;
 
-pub const CLSCTX_ALL = combaseapi.CLSCTX_ALL;
-pub fn CLSID_FileOpenDialog() GUID {
-    return GUID.from(shobjidl.CLSID_FileOpenDialog);
+pub const CLSID_FileOpenDialog: Guid = .{ .Ints = .{
+    .a = 0xdc1c5a9c,
+    .b = 0xe88a,
+    .c = 0x4dde, 
+    .d = .{ 0xa5, 0xa1, 0x60, 0xf8, 0x2a, 0x20, 0xae, 0xf7 }
+}};
+
+pub const CLSID_FileSaveDialog: Guid = .{ .Ints = .{
+    .a = 0xc0b4e2f3,
+    .b = 0xba21,
+    .c = 0x4773,
+    .d = .{ 0x8d, 0xba, 0x33, 0x5e, 0xc9, 0x46, 0xeb, 0x8b },
+}};
+
+pub extern "shell32" fn SHCreateItemFromParsingName(pszPath: [*:0]const u16, pbc: ?*anyopaque, riid: *const Guid, ppv: **anyopaque) HRESULT;
+
+/// Allocate a sentinal utf16 string from a utf8 string
+pub fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) ![:0]u16 {
+    const len: usize = std.unicode.calcUtf16LeLen(data) catch unreachable;
+    var utf16le: [:0]u16 = try allocator.allocSentinel(u16, len, 0);
+    const utf16le_len = try std.unicode.utf8ToUtf16Le(utf16le[0..], data[0..]);
+    std.debug.assert(len == utf16le_len);
+    return utf16le;
 }
-pub fn CLSID_FileSaveDialog() GUID {
-    return GUID.from(shobjidl.CLSID_FileSaveDialog);
+
+/// Create/Allocate a unique window class with a uuid v4 prefixed with `STC`
+pub fn createUIDClass(allocator: std.mem.Allocator) ![:0]u16 {
+    // Size of {3}-{36}{null} == 41
+    var buffer = try std.ArrayList(u8).initCapacity(allocator, 40);
+    defer buffer.deinit();
+
+    const uid = uuid.urn.serialize(uuid.v4.new());
+    try std.fmt.format(buffer.writer(), "STC-{s}", .{uid});
+
+    const temp = try buffer.toOwnedSlice();
+    defer allocator.free(temp);
+
+    return try utf8ToUtf16Alloc(allocator, temp);
 }
-pub const SIGDN_FILESYSPATH = shobjidl.SIGDN_FILESYSPATH;
-pub const IBindCtx = shobjidl.IBindCtx;
-pub const SFGAOF = shobjidl.SFGAOF;
-
-pub const COINIT_APARTMENTTHREADED: u32 = 0x2;
-pub const COINIT_DISABLE_OLE1DDE: u32 = 0x4;
-pub const COINIT_MULTITHREADED: u32 = 0x0;
-pub const COINIT_SPEED_OVER_MEMORY: u32 = 0x8;
-
-pub const SFGAO_FILESYSTEM: u32 = shobjidl.SFGAO_FILESYSTEM;
-
-const FOS = packed struct(u32) {
-    _1: u1 = 0,
-    overwrite_prompt: bool = false,
-    strict_file_types: bool = false, 
-    no_change_dir: bool = false,
-    _2: u1 = 0,
-    pick_folders: bool = false,
-    force_filesystem: bool = false,
-    all_non_storage_items: bool = false,
-    no_validate: bool = false,
-    allow_multi_select: bool = false,
-    _3: u1 = 0,
-    path_must_exist: bool = false,
-    file_must_exist: bool = false,
-    create_prompt: bool = false,
-    share_aware: bool = false,
-    no_readonly_return: bool = false,
-    no_test_file_create: bool = false,
-    hide_mru_places: bool = false,
-    hide_pinned_places: bool = false,
-    _4: u1 = 0,
-    node_reference_links: bool = false,
-    ok_button_needs_interaction: bool = false,
-    _5: u3 = 0,
-    dont_add_to_recent: bool = false,
-    _6: u2 = 0,
-    force_show_hidden: bool = false,
-    default_no_mini_mode: bool = false,
-    force_preview_pane_on: bool = false,
-    support_streamable_items: bool = false
-};
-
-pub const CoInit = packed struct(u32) {
-    _1: u1 = 0,
-    apartment_threaded: bool = false,
-    disable_ole1dde: bool = false,
-    speed_over_memory: bool = false,
-    _26: u28 = 0,
-};
-
-pub const GUID = extern struct {
-    Data1: u32 = std.mem.zeroes(u32),
-    Data2: u16 = std.mem.zeroes(u16),
-    Data3: u16 = std.mem.zeroes(u16),
-    Data4: [8]u8 = std.mem.zeroes([8]u8),
-
-    pub fn from(value: anytype) @This() {
-        switch (@TypeOf(value)) {
-            shobjidl.GUID => return .{
-                .Data1 = value.Data1,
-                .Data2 = value.Data2,
-                .Data3 = value.Data3,
-                .Data4 = value.Data4,
-            },
-            combaseapi.GUID => return .{
-                .Data1 = value.Data1,
-                .Data2 = value.Data2,
-                .Data3 = value.Data3,
-                .Data4 = value.Data4,
-            },
-            else => @compileError("cannot convert type to GUID")
-        }
-    }
-};
-
-pub const CC = packed struct(u32) {
-    rgb_init: bool = false,
-    full_open: bool = false,
-    prevent_full_open: bool = false,
-    show_help: bool = false,
-    enable_hook: bool = false,
-    enable_template: bool = false,
-    enable_template_handle: bool = false,
-    solid_color: bool = false,
-    any_color: bool = false,
-    _m: u23 = 0,
-};
-
-pub const CHOOSECOLORA = extern struct {
-    lStructSize: u32 = 0,
-    hwndOwner: shobjidl.HWND = null,
-    hInstance: shobjidl.HWND = null,
-    rgbResult: Color = .{},
-    lpCustColors: ?[*]Color = null,
-    // Flags: u32 = 0,
-    Flags: CC = .{},
-    lCustData: isize = 0,
-    lpfnHook: shobjidl.LPCCHOOKPROC = null,
-    lpTemplateName: ?[*]const u8 = null,
-};
-
-pub const LOGFONTA = extern struct {
-    height: i32 = @import("std").mem.zeroes(i32),
-    width: i32 = @import("std").mem.zeroes(i32),
-    escapement: i32 = @import("std").mem.zeroes(i32),
-    orientation: i32 = @import("std").mem.zeroes(i32),
-    weight: i32 = @import("std").mem.zeroes(i32),
-    italic: u8 = @import("std").mem.zeroes(u8),
-    underline: u8 = @import("std").mem.zeroes(u8),
-    strikeout: u8 = @import("std").mem.zeroes(u8),
-    charset: CharSet = @import("std").mem.zeroes(CharSet),
-    out_precision: OutPrecision = @import("std").mem.zeroes(OutPrecision),
-    clip_precision: Clip = @import("std").mem.zeroes(Clip),
-    quality: Quality = @import("std").mem.zeroes(Quality),
-    pitch_and_family: PitchAndFamily = @import("std").mem.zeroes(PitchAndFamily),
-    face_name: [32:0]u8 = @import("std").mem.zeroes([32:0]u8),
-};
 
 pub const CharSet = enum(u8) {
     ansi = 0,
@@ -208,6 +148,182 @@ pub const OutPrecision = enum(u8) {
     ps_only = 10,
 };
 
+pub const CDERR = enum(u32) {
+    CDERR_DIALOGFAILURE = 0xFFFF,
+    CDERR_FINDRESFAILURE = 0x0006,
+    CDERR_INITIALIZATION = 0x0002,
+    CDERR_LOADRESFAILURE = 0x0007,
+    CDERR_LOADSTRFAILURE = 0x0005,
+    CDERR_LOCKRESFAILURE = 0x0008,
+    CDERR_MEMALLOCFAILURE = 0x0009,
+    CDERR_MEMLOCKFAILURE = 0x000A,
+    CDERR_NOHINSTANCE = 0x0004,
+    CDERR_NOHOOK = 0x000B,
+    CDERR_NOTEMPLATE = 0x0003,
+    CDERR_REGISTERMSGFAIL = 0x000C,
+    CDERR_STRUCTSIZE = 0x0001,
+};
+
+pub const FDE_RESPONSE = enum(u16) {
+  DEFAULT = 0,
+  ACCEPT = 1,
+  REFUSE = 2
+};
+
+pub const FDAP = enum(u16) {
+  BOTTOM = 0,
+  TOP = 1
+};
+
+pub const SHCONTF = enum(u32) {
+  CHECKING_FOR_CHILDREN = 0x10,
+  FOLDERS = 0x20,
+  NONFOLDERS = 0x40,
+  INCLUDEHIDDEN = 0x80,
+  INIT_ON_FIRST_NEXT = 0x100,
+  NETPRINTERSRCH = 0x200,
+  SHAREABLE = 0x400,
+  STORAGE = 0x800,
+  NAVIGATION_ENUM = 0x1000,
+  FASTITEMS = 0x2000,
+  FLATLIST = 0x4000,
+  ENABLE_ASYNC = 0x8000,
+  INCLUDESUPERHIDDEN = 0x10000
+};
+
+pub const SIGDN = enum(i32) {
+    NORMALDISPLAY = 0,
+    PARENTRELATIVEPARSING = -2147385343,
+    DESKTOPABSOLUTEPARSING = -2147319808,
+    PARENTRELATIVEEDITING = -2147282943,
+    DESKTOPABSOLUTEEDITING = -2147172352,
+    FILESYSPATH = -2147123200,
+    URL = -2147057664,
+    PARENTRELATIVEFORADDRESSBAR = -2146975743,
+    PARENTRELATIVE = -2146959359,
+    PARENTRELATIVEFORUI = -2146877439,
+};
+
+pub const SICHINTF = enum(u32) {
+  DISPLAY = 0,
+  ALLFIELDS = 1,
+  CANONICAL = 0x10000000,
+  TEST_FILESYSPATH_IF_NOT_EQUAL = 0x20000000
+};
+
+pub const SIATTRIBFLAGS = enum(u16) {
+    AND = 1,
+    OR = 2,
+    MASK = 3,
+    ALLITEMS = 16384,
+};
+
+
+pub const SFGAO = packed struct(u32) {
+    pub const CAPABILITYMASK: @This() = .{
+        .CANCOPY = true,
+        .CANMOVE = true,
+        .CANLINK = true,
+        .CANRENAME = true,
+        .CANDELETE = true,
+        .HASPROPSHEET = true,
+        .DROPTARGET = true
+    };
+    pub const CONTENTSMASK: @This() = .{ .HASSUBFOLDER = true };
+    pub const STORAGECAPMASK: @This() =  .{
+        .STORAGE = true,
+        .LINK = true,
+        .READONLY = true,
+        .STREAM = true,
+        .STORAGEANCESTOR = true,
+        .FILESYSANCESTOR = true,
+        .FOLDER = true,
+        .FILESYSTEM = true
+    };
+    pub const PKEYSFGAOMASK: @This() = .{
+        .ISSLOW = true,
+        .READONLY = true,
+        .HASSUBFOLDER = true,
+        .VALIDATE = true,
+    };
+
+    CANCOPY: bool = false,
+    CANMOVE: bool = false,
+    CANLINK: bool = false,
+    STORAGE: bool = false,
+    CANRENAME: bool = false,
+    CANDELETE: bool = false,
+    HASPROPSHEET: bool = false,
+    _1: u1 = 0,
+    DROPTARGET: bool = false,
+    _2: u3 = 0,
+    SYSTEM: bool = false,
+    ENCRYPTED: bool = false,
+    ISSLOW: bool = false,
+    GHOSTED: bool = false,
+    LINK: bool = false,
+    SHARE: bool = false,
+    READONLY: bool = false,
+    HIDDEN: bool = false,
+    NONENUMERATED: bool = false,
+    NEWCONTENT: bool = false,
+    STREAM: bool = false,
+    STORAGEANCESTOR: bool = false,
+    VALIDATE: bool = false,
+    REMOVABLE: bool = false,
+    COMPRESSED: bool = false,
+    BROWSABLE: bool = false,
+    FILESYSANCESTOR: bool = false,
+    FOLDER: bool = false,
+    FILESYSTEM: bool = false,
+    HASSUBFOLDER: bool = false,
+};
+
+const FOS = packed struct(u32) {
+    _1: u1 = 0,
+    OVERWRITEPROMPT: bool = false,
+    STRICTFILETYPES: bool = false, 
+    NOCHANGEDIR: bool = false,
+    _2: u1 = 0,
+    PICKFOLDERS: bool = false,
+    FORCEFILESYSTEM: bool = false,
+    ALLNONSTORAGEITEMS: bool = false,
+    NOVALIDATE: bool = false,
+    ALLOWMULTISELECT: bool = false,
+    _3: u1 = 0,
+    PATHMUSTEXIST: bool = false,
+    FILEMUSTEXIST: bool = false,
+    CREATEPROMPT: bool = false,
+    SHAREAWARE: bool = false,
+    NOREADONLYRETURN: bool = false,
+    NOTESTFILECREATE: bool = false,
+    HIDEMRUPLACES: bool = false,
+    HIDEPINNEDPLACES: bool = false,
+    _4: u1 = 0,
+    NODEREFERENCELINKS: bool = false,
+    OKBUTTONNEEDSINTERACTION: bool = false,
+    _5: u3 = 0,
+    DONTADDTORECENT: bool = false,
+    _6: u2 = 0,
+    FORCESHOWHIDDEN: bool = false,
+    DEFAULTNOMINIMODE: bool = false,
+    FORCEPREVIEWPANEON: bool = false,
+    SUPPORTSTREAMABLEITEMS: bool = false
+};
+
+pub const CC = packed struct(u32) {
+    rgb_init: bool = false,
+    full_open: bool = false,
+    prevent_full_open: bool = false,
+    show_help: bool = false,
+    enable_hook: bool = false,
+    enable_template: bool = false,
+    enable_template_handle: bool = false,
+    solid_color: bool = false,
+    any_color: bool = false,
+    _m: u23 = 0,
+};
+
 pub const PitchAndFamily = packed struct(u8) {
     pitch: Pitch,
     family: Family
@@ -226,25 +342,6 @@ pub const Clip = packed struct(u8) {
     _2: u1 = 0,
     dfa_disable: bool = false,
     embedded: bool = false,
-};
-
-pub const CHOOSEFONTA = extern struct {
-    lStructSize: u32 = 0,
-    hwndOwner: shobjidl.HWND = null,
-    hDC: shobjidl.HDC = null,
-    lpLogFont: ?*LOGFONTA = null,
-    iPointSize: i16 = 0,
-    Flags: CF = .{},
-    rgbColors: Color = .{},
-    lCustData: isize = 0,
-    lpfnHook: shobjidl.LPCFHOOKPROC = null,
-    lpTemplateName: ?[*:0]const u8 = null,
-    hInstance: shobjidl.HINSTANCE = null,
-    lpszStyle: ?[*:0]const u8 = null,
-    nFontType: u16 = 0,
-    ___MISSING_ALIGNMENT__: u16 = 0, 
-    nSizeMin: i16 = 0,
-    nSizeMax: i16 = 0,
 };
 
 pub const FontType = packed struct(u16) {
@@ -293,343 +390,371 @@ pub const CF = packed struct(u32) {
     _m: u6 = 0,
 };
 
-pub const CDERR = enum(u32) {
-    CDERR_DIALOGFAILURE = 0xFFFF,
-    CDERR_FINDRESFAILURE = 0x0006,
-    CDERR_INITIALIZATION = 0x0002,
-    CDERR_LOADRESFAILURE = 0x0007,
-    CDERR_LOADSTRFAILURE = 0x0005,
-    CDERR_LOCKRESFAILURE = 0x0008,
-    CDERR_MEMALLOCFAILURE = 0x0009,
-    CDERR_MEMLOCKFAILURE = 0x000A,
-    CDERR_NOHINSTANCE = 0x0004,
-    CDERR_NOHOOK = 0x000B,
-    CDERR_NOTEMPLATE = 0x0003,
-    CDERR_REGISTERMSGFAIL = 0x000C,
-    CDERR_STRUCTSIZE = 0x0001,
-};
-
-pub extern "comdlg32" fn ChooseColorA(*CHOOSECOLORA) BOOL;
-pub extern "comdlg32" fn ChooseFontA(*CHOOSEFONTA) BOOL;
-pub extern "comdlg32" fn CommDlgExtendedError() u32;
-pub extern "shell32" fn SHCreateItemFromParsingName(pszPath: [*]const u16, pbc: ?*opaque{}, riid: *const GUID, ppv: *?*anyopaque) HRESULT;
-pub extern "ole32" fn CoCreateInstance(rclsid: *const GUID, pUnkOuter: ?*IUnknown, dwClsContext: u32, riid: *const GUID, ppv: *?*anyopaque) HRESULT;
-pub extern "ole32" fn CoInitializeEx(pvReserved: ?*anyopaque, dwCoInit: CoInit) HRESULT;
-pub extern "ole32" fn CoTaskMemFree(pv: ?*anyopaque) void;
-pub extern "ole32" fn CoUninitialize() void;
-
-/// Allocate a sentinal utf16 string from a utf8 string
-pub fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) ![:0]u16 {
-    const len: usize = std.unicode.calcUtf16LeLen(data) catch unreachable;
-    var utf16le: [:0]u16 = try allocator.allocSentinel(u16, len, 0);
-    const utf16le_len = try std.unicode.utf8ToUtf16Le(utf16le[0..], data[0..]);
-    std.debug.assert(len == utf16le_len);
-    return utf16le;
-}
-
-/// Create/Allocate a unique window class with a uuid v4 prefixed with `STC`
-pub fn createUIDClass(allocator: std.mem.Allocator) ![:0]u16 {
-    // Size of {3}-{36}{null} == 41
-    var buffer = try std.ArrayList(u8).initCapacity(allocator, 40);
-    defer buffer.deinit();
-
-    const uid = uuid.urn.serialize(uuid.v4.new());
-    try std.fmt.format(buffer.writer(), "STC-{s}", .{uid});
-
-    const temp = try buffer.toOwnedSlice();
-    defer allocator.free(temp);
-
-    return try utf8ToUtf16Alloc(allocator, temp);
-}
-
-pub fn IFileDialog(D: enum { save, open }) type {
-    const T = if (D == .save) shobjidl.IFileSaveDialog else shobjidl.IFileOpenDialog;
-    const guid: GUID = if (D == .save) .{
-        .Data1 = 0x84bccd23,
-        .Data2 = 0x5fde,
-        .Data3 = 0x4cdb,
-        .Data4 = .{ 0xae, 0xa4, 0xaf, 0x64, 0xb8, 0x3d, 0x78, 0xab }
-    }
-    else .{
-        .Data1 = 0xd57c7288,
-        .Data2 = 0xd4ad,
-        .Data3 = 0x4768,
-        .Data4 = .{ 0xbe, 0x02, 0x9d, 0x96, 0x95, 0x32, 0xd9, 0x60 },
+pub const IFileDialogEvents = extern struct {
+    pub const VTable = extern struct {
+        QueryInterface: *const fn (*IFileDialogEvents, *const Guid, *?*anyopaque) callconv(.c) HRESULT,
+        AddRef: *const fn (*IFileDialogEvents) callconv(.c) u32,
+        Release: *const fn (*IFileDialogEvents) callconv(.c) u32,
+        OnFileOk: *const fn (*IFileDialogEvents, *IFileDialog) callconv(.c) HRESULT,
+        OnFolderChanging: *const fn (*IFileDialogEvents, *IFileDialog, *IShellItem) callconv(.c) HRESULT,
+        OnFolderChange: *const fn (*IFileDialogEvents, *IFileDialog) callconv(.c) HRESULT,
+        OnSelectionChange: *const fn (*IFileDialogEvents, *IFileDialog) callconv(.c) HRESULT,
+        OnShareViolation: *const fn (*IFileDialogEvents, *IFileDialog, *IShellItem, *FDE_RESPONSE) callconv(.c) HRESULT,
+        OnTypeChange: *const fn (*IFileDialogEvents, *IFileDialog) callconv(.c) HRESULT,
+        OnOverwrite: *const fn (*IFileDialogEvents, *IFileDialog, *IShellItem, *FDE_RESPONSE) callconv(.c) HRESULT,
     };
 
-    return struct {
-        const Self = @This();
+    vtable: *const VTable,
+};
 
-        pub const Vtbl = if (D == .save) 
-            shobjidl.struct_IFileSaveDialogVtbl
-        else
-            shobjidl.struct_IFileOpenDialogVtbl;
+pub const IFileOperationProgressSink = extern struct {
+    pub const VTable = extern struct {
+        base: IUnknown.VTable,
+        StartOperations: *const fn (*IFileOperationProgressSink) callconv(.c) HRESULT,
+        FinishOperations: *const fn (*IFileOperationProgressSink, HRESULT) callconv(.c) HRESULT,
+        PreRenameItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, [*:0]const u16) callconv(.c) HRESULT,
+        PostRenameItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, [*:0]const u16, HRESULT, *IShellItem) callconv(.c) HRESULT,
+        PreMoveItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, *IShellItem, [*:0]const u16) callconv(.c) HRESULT,
+        PostMoveItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, *IShellItem, [*:0]const u16, HRESULT, *IShellItem) callconv(.c) HRESULT,
+        PreCopyItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, *IShellItem, [*:0]const u16) callconv(.c) HRESULT,
+        PostCopyItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, *IShellItem, [*:0]const u16, HRESULT, *IShellItem) callconv(.c) HRESULT,
+        PreDeleteItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem) callconv(.c) HRESULT,
+        PostDeleteItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, HRESULT, *IShellItem) callconv(.c) HRESULT,
+        PreNewItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, [*:0]const u16) callconv(.c) HRESULT,
+        PostNewItem: *const fn (*IFileOperationProgressSink, u32, *IShellItem, [*:0]const u16, [*:0]const u16, u32, HRESULT, *IShellItem) callconv(.c) HRESULT,
+        UpdateProgress: *const fn (*IFileOperationProgressSink, u16, u16) callconv(.c) HRESULT,
+        ResetTimer: *const fn (*IFileOperationProgressSink) callconv(.c) HRESULT,
+        PauseTimer: *const fn (*IFileOperationProgressSink) callconv(.c) HRESULT,
+        ResumeTimer: *const fn (*IFileOperationProgressSink) callconv(.c) HRESULT,
+    };
+    vtable: *const VTable,
+};
 
-        inner: ?*anyopaque = null,
+pub const IModalWindow = extern struct {
+    pub const VTable = extern struct {
+        base: IUnknown.VTable,
+        Show: *const fn (*IModalWindow, ?HWND) callconv(.c) HRESULT,
+    };
+    vtable: *const VTable,
 
-        pub inline fn uuidof() GUID {
-            return guid;
+    pub fn show(self: *@This(), hwnd: ?HWND) !void {
+        const result = self.vtable.Show(self, hwnd);
+        if (result == S_OK) return;
+
+        switch (std.os.windows.HRESULT_CODE(result)) {
+            .CANCELLED => return error.UserCancelled,
+            else => return error.UnknownError,
         }
+    }
+};
 
-        pub fn show(self: *@This(), hwnd: ?HWND) error{UserCancelled,UnknownError}!void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.Show) |Show| {
-                    const result = Show(i, if (hwnd) |h| @ptrCast(@alignCast(h)) else null);
-                    if (result == S_OK) return;
+pub const IFileDialog = extern struct {
+    pub const VTable = extern struct {
+        base: IModalWindow.VTable,
+        SetFileTypes: *const fn (*IFileDialog, u16, [*]const COMDLG_FILTERSPEC) callconv(.c) HRESULT,
+        SetFileTypeIndex: *const fn (*IFileDialog, u16) callconv(.c) HRESULT,
+        GetFileTypeIndex: *const fn (*IFileDialog, *u16) callconv(.c) HRESULT,
+        Advise: *const fn (*IFileDialog, *IFileDialogEvents, *u32) callconv(.c) HRESULT,
+        Unadvise: *const fn (*IFileDialog, u32) callconv(.c) HRESULT,
+        SetOptions: *const fn (*IFileDialog, FOS) callconv(.c) HRESULT,
+        GetOptions: *const fn (*IFileDialog, *FOS) callconv(.c) HRESULT,
+        SetDefaultFolder: *const fn (*IFileDialog, *IShellItem) callconv(.c) HRESULT,
+        SetFolder: *const fn (*IFileDialog, *IShellItem) callconv(.c) HRESULT,
+        GetFolder: *const fn (*IFileDialog, **IShellItem) callconv(.c) HRESULT,
+        GetCurrentSelection: *const fn (*IFileDialog, **IShellItem) callconv(.c) HRESULT,
+        SetFileName: *const fn (*IFileDialog, [*:0]const u16) callconv(.c) HRESULT,
+        GetFileName: *const fn (*IFileDialog, *[*:0]const u16) callconv(.c) HRESULT,
+        SetTitle: *const fn (*IFileDialog, [*:0]const u16) callconv(.c) HRESULT,
+        SetOkButtonLabel: *const fn (*IFileDialog, [*:0]const u16) callconv(.c) HRESULT,
+        SetFileNameLabel: *const fn (*IFileDialog, [*:0]const u16) callconv(.c) HRESULT,
+        GetResult: *const fn (*IFileDialog, **IShellItem) callconv(.c) HRESULT,
+        AddPlace: *const fn (*IFileDialog, *IShellItem, FDAP) callconv(.c) HRESULT,
+        SetDefaultExtension: *const fn (*IFileDialog, [*:0]const u16) callconv(.c) HRESULT,
+        Close: *const fn (*IFileDialog, HRESULT) callconv(.c) HRESULT,
+        SetClientGuid: *const fn (*IFileDialog, *const Guid) callconv(.c) HRESULT,
+        ClearClientData: *const fn (*IFileDialog) callconv(.c) HRESULT,
+        SetFilter: *const fn (*IFileDialog, *IShellItemFilter) callconv(.c) HRESULT,
+    };
+    vtable: *const VTable,
+    IModalWindow: IModalWindow,
 
-                    switch (std.os.windows.HRESULT_CODE(result)) {
-                        .CANCELLED => return error.UserCancelled,
-                        else => return error.UnknownError,
-                    }
-                }
-            }
+    pub fn setFolder(self: *@This(), item: *IShellItem) !void {
+        const result = self.vtable.SetFolder(self, item);
+        if (result != S_OK) return error.UknownError;
+    }
 
+    pub fn setFileName(self: *@This(), path: [*:0]const u16) !void {
+        const result = self.vtable.SetFileName(self, path);
+        if (result != S_OK) return error.UknownError;
+    }
+
+    pub fn setFileTypes(self: *@This(), filters: []const COMDLG_FILTERSPEC) !void {
+        const result = self.vtable.SetFileTypes(self, @intCast(filters.len), filters.ptr);
+        if (result != S_OK) return error.UknownError;
+    }
+
+    pub fn setTitle(self: *@This(), title: [*:0]const u16) !void {
+        const result = self.vtable.SetTitle(self, title);
+        if (result != S_OK) return error.UknownError;
+    }
+
+    pub fn getOptions(self: *@This()) !FOS {
+        var options: FOS = .{};
+        const result = self.vtable.GetOptions(self, &options);
+        if (result != S_OK) return error.UknownError;
+        return options;
+    }
+
+    pub fn setOptions(self: *@This(), options: FOS) !void {
+        const result = self.vtable.SetOptions(self, options);
+        if (result != S_OK) return error.UnknownError;
+    }
+
+    pub fn getResult(self: *@This()) !*IShellItem {
+        var item: *IShellItem = undefined;
+        const result = self.vtable.GetResult(self, &item);
+        if (result != S_OK) return error.UnknownError;
+        return item;
+    }
+
+    pub fn getSelectedItem(self: *@This()) !*IShellItem {
+        var item: *IShellItem = undefined;
+        const result = self.vtable.GetCurrentSelection(self, &item);
+        if (result != S_OK) return error.UnknownError;
+        return item;
+    }
+};
+
+pub const IFileOpenDialog = extern struct {
+    const VTable = extern struct {
+        base: IFileDialog.VTable,
+        GetResults: *const fn (*IFileOpenDialog, **IShellItemArray) callconv(.c) HRESULT,
+        GetSelectedItems: *const fn (*IFileOpenDialog, **IShellItemArray) callconv(.c) HRESULT,
+    };
+
+    vtable: *const VTable,
+
+    pub inline fn uuid() Guid {
+        return .{ .Ints = .{
+            .a = 0xd57c7288,
+            .b = 0xd4ad,
+            .c = 0x4768,
+            .d = .{ 0xbe, 0x02, 0x9d, 0x96, 0x95, 0x32, 0xd9, 0x60 },
+        }};
+    }
+
+    pub fn setFolder(self: *@This(), item: *IShellItem) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setFolder(item);
+    }
+
+    pub fn setFileName(self: *@This(), path: [*:0]const u16) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setFileName(path);
+    }
+
+    pub fn setFileTypes(self: *@This(), filters: []const COMDLG_FILTERSPEC) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setFileTypes(filters);
+    }
+
+    pub fn setTitle(self: *@This(), title: [*:0]const u16) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setTitle(title);
+    }
+
+    pub fn getOptions(self: *@This()) !FOS {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        return try this.getOptions();
+    }
+
+    pub fn setOptions(self: *@This(), options: FOS) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setOptions(options);
+    }
+
+    pub fn show(self: *@This(), hwnd: ?HWND) !void {
+        const this: *IModalWindow = @ptrCast(@alignCast(self));
+        try this.show(hwnd);
+    }
+
+    pub fn getResults(self: *@This()) !*IShellItemArray {
+        var items: *IShellItemArray = undefined;
+        const result = self.vtable.GetResults(self, &items);
+        if (result != S_OK) return error.UnknownError;
+        return items;
+    }
+
+    pub fn getSelectedItems(self: *@This()) !*IShellItemArray {
+        var items: *IShellItemArray = undefined;
+        const result = self.vtable.GetSelectedItems(self, &items);
+        if (result != S_OK) return error.UnknownError;
+        return items;
+    }
+};
+
+pub const IFileSaveDialog = extern struct {
+    const VTable = extern struct {
+        base: IFileDialog.VTable,
+        SetSaveAsItem: *const fn (*IFileSaveDialog, *IShellItem) callconv(.c) HRESULT,
+        SetProperties: *const fn (*IFileSaveDialog, *IPropertyStore) callconv(.c) HRESULT,
+        SetCollectedProperties: *const fn (*IFileSaveDialog, *IPropertyDescriptionList, i16) callconv(.c) HRESULT,
+        GetProperties: *const fn (*IFileSaveDialog, **IPropertyStore) callconv(.c) HRESULT,
+        ApplyProperties: *const fn (*IFileSaveDialog, *IShellItem, *IPropertyStore, ?HWND, *IFileOperationProgressSink) callconv(.c) HRESULT,
+    };
+
+    vtable: *const VTable,
+
+    pub inline fn uuid() Guid {
+        return .{ .Ints = .{
+            .a = 0x84bccd23,
+            .b = 0x5fde,
+            .c = 0x4cdb,
+            .d = .{ 0xae, 0xa4, 0xaf, 0x64, 0xb8, 0x3d, 0x78, 0xab }
+        }};
+    }
+
+    pub fn setFolder(self: *@This(), item: *IShellItem) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setFolder(item);
+    }
+
+    pub fn setFileName(self: *@This(), path: [*:0]const u16) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setFileName(path);
+    }
+
+    pub fn setFileTypes(self: *@This(), filters: []const COMDLG_FILTERSPEC) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setFileTypes(filters);
+    }
+
+    pub fn setTitle(self: *@This(), title: [*:0]const u16) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setTitle(title);
+    }
+
+    pub fn getOptions(self: *@This()) !FOS {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        return try this.getOptions();
+    }
+
+    pub fn setOptions(self: *@This(), options: FOS) !void {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        try this.setOptions(options);
+    }
+
+    pub fn show(self: *@This(), hwnd: ?HWND) !void {
+        const this: *IModalWindow = @ptrCast(@alignCast(self));
+        try this.show(hwnd);
+    }
+
+    pub fn getResult(self: *@This()) !*IShellItem {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        return try this.getResult();
+    }
+
+    pub fn getSelectedItem(self: *@This()) !*IShellItem {
+        const this: *IFileDialog = @ptrCast(@alignCast(self));
+        return try this.getSelectedItem();
+    }
+};
+
+pub const IShellItem = extern struct {
+    pub const VTable = extern struct {
+        base: IUnknown.VTable,
+        BindToHandler: *const fn (*IShellItem, *IBindCtx, *const Guid, *const Guid, *?*anyopaque) callconv(.c) HRESULT,
+        GetParent: *const fn (*IShellItem, **IShellItem) callconv(.c) HRESULT,
+        GetDisplayName: *const fn (*IShellItem, SIGDN, *[*:0]const u16) callconv(.c) HRESULT,
+        GetAttributes: *const fn (*IShellItem, SFGAO, *SFGAO) callconv(.c) HRESULT,
+        Compare: *const fn (*IShellItem, *IShellItem, SICHINTF, *c_int) callconv(.c) HRESULT,
+    };
+    vtable: *const VTable,
+
+    pub inline fn uuid() Guid { 
+        return .{ .Ints = .{
+            .a = 0x43826d1e,
+            .b = 0xe718,
+            .c = 0x42ee,
+            .d = .{ 0xbc, 0x55, 0xa1, 0xe2, 0x61, 0xc3, 0x7b, 0xfe },
+        }};
+    }
+
+    pub fn getParent(self: *@This()) !?*IShellItem {
+        var parent: *IShellItem = undefined;
+        const result = self.vtable.GetParent(self, &parent);
+        if (result != S_OK) return null;
+        return parent;
+    }
+
+    pub fn getDisplayName(self: *@This(), sig: SIGDN) ![*:0]const u16 {
+        var display_name: [*:0]const u16 = undefined;
+        const result = self.vtable.GetDisplayName(self, sig, &display_name);
+        if (result != S_OK) return error.UnknownError;
+        return display_name;
+    }
+
+    pub fn getAttributes(self: *@This(), in: SFGAO) !SFGAO {
+        var attrs: SFGAO = .{};
+        const result = self.vtable.GetAttributes(self, in, &attrs);
+        if (result != S_OK) return error.UnknownError;
+        return attrs;
+    }
+
+    pub fn release(self: *@This()) !u32 {
+        var this: *IUnknown = @ptrCast(@alignCast(self));
+        return this.Release();
+    }
+};
+
+pub const IShellItemFilter = extern struct {
+    pub const VTable = extern struct {
+        base: IUnknown.VTable,
+        IncludeItem: *const fn (*IShellItemFilter, *IShellItem) callconv(.c) HRESULT,
+        GetEnumFlagsForItem: *const fn (*IShellItemFilter, *IShellItem, *SHCONTF) callconv(.c) HRESULT,
+    };
+    vtable: *const VTable,
+};
+
+pub const IEnumShellItems = extern struct {
+    pub const VTable = extern struct {
+        base: IUnknown.VTable,
+        Next: *const fn (*IEnumShellItems, u32, **IShellItem, *u32) callconv(.c) HRESULT,
+        Skip: *const fn (*IEnumShellItems, u32) callconv(.c) HRESULT,
+        Reset: *const fn (*IEnumShellItems) callconv(.c) HRESULT,
+        Clone: *const fn (*IEnumShellItems, **IEnumShellItems) callconv(.c) HRESULT,
+    };
+
+    vtable: *const VTable,
+};
+
+pub const IShellItemArray = extern struct {
+    pub const VTable = extern struct {
+        base: IUnknown.VTable,
+        BindToHandler: *const fn (*IShellItemArray, *IBindCtx, *const Guid, *const Guid, *?*anyopaque) callconv(.c) HRESULT,
+        GetPropertyStore: *const fn (*IShellItemArray, GETPROPERTYSTOREFLAGS, *const Guid, *?*anyopaque) callconv(.c) HRESULT,
+        GetPropertyDescriptionList: *const fn (*IShellItemArray, *const PROPERTYKEY, *const Guid, *?*anyopaque) callconv(.c) HRESULT,
+        GetAttributes: *const fn (*IShellItemArray, SIATTRIBFLAGS, SFGAO, *SFGAO) callconv(.c) HRESULT,
+        GetCount: *const fn (*IShellItemArray, *u32) callconv(.c) HRESULT,
+        GetItemAt: *const fn (*IShellItemArray, u32, **IShellItem) callconv(.c) HRESULT,
+        EnumItems: *const fn (*IShellItemArray, **IEnumShellItems) callconv(.c) HRESULT,
+    };
+
+    vtable: *const VTable,
+
+    pub fn getItemAt(self: *@This(), index: usize) !*IShellItem {
+        var item: *IShellItem = undefined;
+        const result = self.vtable.GetItemAt(self, @intCast(index), &item);
+        if (result != S_OK) {
             return error.UnknownError;
         }
-
-        pub fn setDefaultExtension(self: *@This(), extension: [*:0]const u16) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetDefaultExtension) |SetDefaultExtension| {
-                    const result = SetDefaultExtension(i, extension);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                    // return std.os.windows.HRESULT_CODE(result);
-                }
-            }
-        }
-
-        pub fn setDefaultFolder(self: *@This(), item: ?*shobjidl.IShellItem) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetDefaultFolder) |SetDefaultFolder| {
-                    const result = SetDefaultFolder(i, item);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn setFolder(self: *@This(), item: ?*shobjidl.IShellItem) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetFolder) |SetFolder| {
-                    const result = SetFolder(i, item);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn setFileName(self: *@This(), file_name: [*:0]const u16) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetFileName) |SetFileName| {
-                    const result = SetFileName(i, file_name);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn setFileNameLabel(self: *@This(), file_name_label: [*:0]const u16) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetFileNameLabel) |SetFileNameLabel| {
-                    const result = SetFileNameLabel(i, file_name_label);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn setFileTypes(self: *@This(), specs: []const shobjidl.COMDLG_FILTERSPEC) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetFileTypes) |SetFileTypes| {
-                    const result = SetFileTypes(i, @intCast(specs.len), specs.ptr);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn setFileTypeIndex(self: *@This(), idx: u32) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetFileTypeIndex) |SetFileTypeIndex| {
-                    const result = SetFileTypeIndex(i, idx);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn setOkButtonLabel(self: *@This(), label: [*:0]const u16) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetOkButtonLabel) |SetOkButtonLabel| {
-                    const result = SetOkButtonLabel(i, label);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn setTitle(self: *@This(), title: [*:0]const u16) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetTitle) |SetTitle| {
-                    const result = SetTitle(i, title);
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub fn getOptions(self: *@This()) !FOS {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.GetOptions) |GetOptions| {
-                    var options: u32 = 0;
-                    const result = GetOptions(i, &options);
-                    if (result == S_OK) {
-                        return @bitCast(options);
-                    }
-                    return error.Win32Error;
-                }
-            }
-            return error.NoDialog;
-        }
-
-        pub fn setOptions(self: *@This(), options: FOS) !void {
-            if (self.inner) |inner| {
-                const i: *T = @ptrCast(@alignCast(inner));
-                if (i.lpVtbl.*.SetOptions) |SetOptions| {
-                    const result = SetOptions(i, @bitCast(options));
-                    if (result == S_OK) return;
-                    return error.Win32Error;
-                }
-            }
-        }
-
-        pub usingnamespace switch (D) {
-            .open => struct {
-                pub fn getResults(self: *Self) !IShellItemArray {
-                    if (self.inner) |inner| {
-                        const i: *shobjidl.IFileOpenDialog = @ptrCast(@alignCast(inner));
-                        if (i.lpVtbl.*.GetResults) |GetResults| {
-                            var data: ?*shobjidl.IShellItemArray = null;
-                            const result = GetResults(i, &data);
-                            if (result == S_OK) return IShellItemArray { .inner = data };
-                            return error.Win32Error;
-                        }
-                    }
-                    return error.NoDialogFound;
-                }
-            },
-            .save => struct {
-                pub fn setSaveAs(self: *Self, path: *shobjidl.IShellItem) !void {
-                    if (self.inner) |inner| {
-                        const i: *shobjidl.IFileSaveDialog = @ptrCast(@alignCast(inner));
-                        if (i.lpVtbl.*.SetSaveAsItem) |SetSaveAsItem| {
-                            const result = SetSaveAsItem(i, path);
-                            if (result == S_OK) return;
-                            return error.Win32Error;
-                        }
-                    }
-                    return error.NoDialogFound;
-                }
-
-                pub fn getResult(self: *Self) !?IShellItem {
-                    if (self.inner) |inner| {
-                        const i: *shobjidl.IFileSaveDialog = @ptrCast(@alignCast(inner));
-                        if (i.lpVtbl.*.GetResult) |GetResult| {
-                            var item: ?*shobjidl.IShellItem = null;
-                            const result = GetResult(i, &item);
-                            if (result == S_OK) return IShellItem { .inner = item };
-                            return error.Win32Error;
-                        }
-                    }
-                    return error.NoDialogFound;
-                }
-            }
-        };
-    };
-}
-
-pub const IShellItem = struct {
-    inner: ?*shobjidl.IShellItem = null,
-
-    pub inline fn uuidof() GUID { 
-        return .{
-            .Data1 = 0x43826d1e,
-            .Data2 = 0xe718,
-            .Data3 = 0x42ee,
-            .Data4 = .{ 0xbc, 0x55, 0xa1, 0xe2, 0x61, 0xc3, 0x7b, 0xfe },
-        };
+        return item;
     }
 
-    pub fn getAttributes(self: @This(), in: u32) !u32 {
-        if (self.inner) |inner| {
-            if (inner.lpVtbl.*.GetAttributes) |GetAttributes| {
-                var out: u32 = 0;
-                const result = GetAttributes(inner, in, &out);
-                if (result == S_OK or result == S_FALSE) return out;
-                return error.Win32Error;
-            }
-        }
-        return error.NoInnerValue;
-    }
-
-    pub fn getDisplayName(self: @This()) !?[*:0]const u16 {
-        if (self.inner) |inner| {
-            if (inner.lpVtbl.*.GetDisplayName) |GetDisplayName| {
-                const gdn: *const fn (?*shobjidl.IShellItem, shobjidl.SIGDN, *?[*:0]const u16) callconv(.c) HRESULT = @ptrCast(GetDisplayName);
-                var out: ?[*:0]const u16 = null;
-
-                const result = gdn(inner, shobjidl.SIGDN_FILESYSPATH, &out);
-                if (result != S_OK) return error.Win32Error;
-                return out;
-            }
-        }
-        return error.NoInnerValue;
-    }
-
-    pub fn release(self: @This()) !void {
-        if (self.inner) |inner| {
-            if (inner.lpVtbl.*.Release) |Release| {
-                if (Release(inner) != S_OK) return error.ReleaseShellItem;
-            }
-        }
-    }
-};
-
-pub const IShellItemArray = struct {
-    inner: ?*shobjidl.IShellItemArray = null,
-
-    pub fn count(self: *const @This()) !usize {
-        if (self.inner) |inner| {
-            if (inner.lpVtbl.*.GetCount) |GetCount| {
-                var c: u32 = 0;
-                const response = GetCount(inner, &c);
-                if (response == S_OK) return @intCast(c);
-                return error.Win32Error;
-            }
-        }
-        return error.NoInnerValue;
-    }
-
-    pub fn get(self: *@This(), at: usize) !?IShellItem {
-        if (self.inner) |inner| {
-            if (inner.lpVtbl.*.GetItemAt) |GetItemAt| {
-                var result: ?*shobjidl.IShellItem = null;
-                const response = GetItemAt(inner, @intCast(at), &result);
-                if (response == S_OK) return if (result) |r| IShellItem { .inner = r } else null;
-                return error.Win32Error;
-            }
-        }
-        return error.NoInnerValue;
+    pub fn getCount(self: *@This()) !usize {
+        var count: u32 = 0;
+        const result = self.vtable.GetCount(self, &count);
+        if (result != S_OK) return error.UnknownError;
+        return @intCast(count);
     }
 };

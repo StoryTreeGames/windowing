@@ -15,10 +15,6 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // ========================================================================
-    //                             module
-    // ========================================================================
-
     const module = b.addModule(NAME, .{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
 
     const zigwin32 = b.dependency("zigwin32", .{});
@@ -32,10 +28,6 @@ pub fn build(b: *std.Build) !void {
         module.addImport("win32", zigwin32.module("win32"));
     }
 
-    // ========================================================================
-    //                                  Tests
-    // ========================================================================
-
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -46,10 +38,6 @@ pub fn build(b: *std.Build) !void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
-
-    // ========================================================================
-    //                                 examples
-    // ========================================================================
 
     inline for (examples) |example| {
         addExample(b, target, optimize, example, &[_]ModuleMap{

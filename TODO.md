@@ -1,6 +1,5 @@
 # TODO
 
-- [ ] Print Dialog
 - [ ] Notifications
   - [ ] Toasts
   - [ ] Systray

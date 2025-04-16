@@ -70,11 +70,12 @@ fn Button(comptime buttons: ?Buttons) type {
     return void;
 }
 
-pub const Util = switch (builtin.os.tag) {
-    .windows => struct {
-        const MESSAGEBOX_RESULT = @import("win32").ui.windows_and_messaging.MESSAGEBOX_RESULT;
+pub fn processResult(comptime buttons: ?Buttons, action: i32) Button(buttons) {
+    switch (builtin.os.tag) {
+        .windows => {
+            const MESSAGEBOX_RESULT = @import("win32").ui.windows_and_messaging.MESSAGEBOX_RESULT;
+            const result: MESSAGEBOX_RESULT = @enumFromInt(action);
 
-        pub fn processResult(comptime buttons: ?Buttons, result: MESSAGEBOX_RESULT) Button(buttons) {
             if (buttons) |btns| {
                 switch (btns) {
                     .abort_retry_ignore => switch (result) {
@@ -120,10 +121,10 @@ pub const Util = switch (builtin.os.tag) {
                 }
             }
             return {};
-        }
-    },
-    else => struct {}
-};
+        },
+        else => @compileError("platform not supported")
+    }
+}
 
 pub const MessageOptions = struct {
     title: ?[]const u8 = null,
@@ -165,7 +166,7 @@ pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) Button(buttons)
                 if (opts.title) |t| @ptrCast(t.ptr) else null,
                 @as(wam.MESSAGEBOX_STYLE, @bitCast(button_style | icon_style))
             );
-            return Util.processResult(buttons, result);
+            return processResult(buttons, @intFromEnum(result));
         },
         else => @compileError("platform not supported"),
     }
@@ -179,13 +180,11 @@ fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: a
 
             if (options.folder.len > 0) {
                 const path = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.folder);
-                var default_folder: ?*anyopaque = null;
+                var default_folder: *anyopaque = undefined;
 
-                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.uuidof(), &default_folder);
+                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.uuid(), &default_folder);
                 if (result != util.S_OK) return error.Win32Error;
-
-                const folder = if (default_folder) |df| @as(*util.shobjidl.IShellItem, @ptrCast(@alignCast(df))) else null; 
-                try dialog.setFolder(folder);
+                try dialog.setFolder(@ptrCast(@alignCast(default_folder)));
             }
 
             if (options.file_name.len > 0) {
@@ -210,11 +209,11 @@ fn addFileDialogFilters(allocator: std.mem.Allocator, dialog: anytype, types: []
     switch(builtin.os.tag) {
         .windows => {
             const util = @import("windows/util.zig");
-            const filters = try allocator.alloc(util.shobjidl.COMDLG_FILTERSPEC, types.len);
+            const filters = try allocator.alloc(util.COMDLG_FILTERSPEC, types.len);
             for (types, 0..) |filter, i| {
                 const name = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[0]);
                 const spec = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[1]);
-                filters[i] = util.shobjidl.COMDLG_FILTERSPEC {
+                filters[i] = util.COMDLG_FILTERSPEC {
                     .pszName = name.ptr,
                     .pszSpec = spec.ptr,
                 };
@@ -226,11 +225,6 @@ fn addFileDialogFilters(allocator: std.mem.Allocator, dialog: anytype, types: []
 }
 
 pub const FileOpenDialogOptions = struct {
-    directory: bool = false,
-    multiple: bool = false,
-    exists: bool = true,
-    show_pinned: bool = true,
-    show_hidden: bool = false,
     /// The HWND of the window that the dialog will be owned by. If not provided the dialog will be
     /// an independent top-level window.
     owner: ?*anyopaque = null,
@@ -247,6 +241,12 @@ pub const FileOpenDialogOptions = struct {
     filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{ .{ "All types (*.*)", "*.*" } },
     /// The filename to pre-populate in the dialog box
     file_name: []const u8 = "",
+    /// Pick folders/directories instead of files
+    directory: bool = false,
+    /// Allow the user to select more than one item
+    multiple: bool = false,
+    /// Ensure that the selected item(s) exist
+    exists: bool = true,
 };
 
 /// Caller is responsible for freeing the returned array of strings
@@ -260,31 +260,31 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
             const util = @import("windows/util.zig");
 
             if (util.CoInitializeEx(null, .{
-                .apartment_threaded = true,
-                .disable_ole1dde = true,
+                .APARTMENTTHREADED = 1,
+                .DISABLE_OLE1DDE = 1,
             }) != util.S_OK) return error.CoInitializeFailure;
             defer util.CoUninitialize();
 
-            var file_open_dialog: util.IFileDialog(.open) = undefined;
+            var dialog: *anyopaque = undefined;
             if (util.CoCreateInstance(
-                &util.CLSID_FileOpenDialog(),
+                &util.CLSID_FileOpenDialog,
                 null,
                 util.CLSCTX_ALL,
-                &util.IFileDialog(.open).uuidof(),
-                &file_open_dialog.inner
+                &util.IFileOpenDialog.uuid(),
+                &dialog
             ) != util.S_OK) return error.CoCreateInstanceFailure;
 
-            try configureFileDialog(allo, &file_open_dialog, opts);
+            var file_open_dialog: *util.IFileOpenDialog = @ptrCast(@alignCast(dialog));
+
+            try configureFileDialog(allo, file_open_dialog, opts);
 
             var options = try file_open_dialog.getOptions();
-            options.pick_folders = opts.directory;
-            options.allow_multi_select = opts.multiple;
+            options.PICKFOLDERS = opts.directory;
+            options.ALLOWMULTISELECT = opts.multiple;
             if (opts.directory)
-                options.path_must_exist = opts.exists
+                options.PATHMUSTEXIST = opts.exists
             else
-                options.file_must_exist = opts.exists;
-            options.hide_pinned_places = !opts.show_pinned;
-            options.force_show_hidden = opts.show_hidden;
+                options.FILEMUSTEXIST = opts.exists;
             try file_open_dialog.setOptions(@bitCast(options));
 
             file_open_dialog.show(null) catch |e| switch (e) {
@@ -294,21 +294,19 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
 
             var out = std.ArrayList([]const u8).init(allocator);
             var shell_items = try file_open_dialog.getResults();
-            for (0..try shell_items.count()) |i| {
-                if (try shell_items.get(i)) |item| {
-                    defer item.release() catch {};
+            for (0..try shell_items.getCount()) |i| {
+                const item = try shell_items.getItemAt(i);
+                defer _ = item.release() catch {};
 
-                    const attrs = try item.getAttributes(util.SFGAO_FILESYSTEM);
-                    if (attrs & util.SFGAO_FILESYSTEM == 0) {
-                        continue;
-                    }
-
-                    if (try item.getDisplayName()) |name| {
-                        defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
-                        const n = try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
-                        try out.append(n);
-                    }
+                const attrs = try item.getAttributes(.{ .FILESYSTEM = true });
+                if (!attrs.FILESYSTEM) {
+                    continue;
                 }
+
+                const name = try item.getDisplayName(.DESKTOPABSOLUTEPARSING);
+                defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
+                const n = try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
+                try out.append(n);
             }
 
             return try out.toOwnedSlice();
@@ -318,10 +316,6 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
 }
 
 pub const FileSaveDialogOptions = struct {
-    show_pinned: bool = true,
-    show_hidden: bool = false,
-    prompt_on_create: bool = false,
-    save_as: []const u8 = "",
     /// The HWND of the window that the dialog will be owned by. If not provided the dialog will be
     /// an independent top-level window.
     owner: ?*anyopaque = null,
@@ -338,6 +332,8 @@ pub const FileSaveDialogOptions = struct {
     filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{ .{ "All types (*.*)", "*.*" } },
     /// The filename to pre-populate in the dialog box
     file_name: []const u8 = "",
+    /// Whether the user should be prompted when creating or overwritting a file
+    prompt_on_create: bool = false,
 };
 
 pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const u8 {
@@ -350,38 +346,26 @@ pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const
             const util = @import("windows/util.zig");
 
             if (util.CoInitializeEx(null, .{
-                .apartment_threaded = true,
-                .disable_ole1dde = true,
+                .APARTMENTTHREADED = 1,
+                .DISABLE_OLE1DDE = 1,
             }) != util.S_OK) return error.CoInitializeFailure;
             defer util.CoUninitialize();
 
-            var file_save_dialog: util.IFileDialog(.save) = undefined;
+            var dialog: *anyopaque = undefined;
             if (util.CoCreateInstance(
-                &util.CLSID_FileSaveDialog(),
+                &util.CLSID_FileSaveDialog,
                 null,
                 util.CLSCTX_ALL,
-                &util.IFileDialog(.save).uuidof(),
-                &file_save_dialog.inner
+                &util.IFileSaveDialog.uuid(),
+                &dialog
             ) != util.S_OK) return error.CoCreateInstanceFailure;
 
-            if (opts.save_as.len > 0) {
-                const path = try std.unicode.utf8ToUtf16LeAllocZ(allo, opts.save_as);
-                var save_as_item: ?*anyopaque = null;
+            var file_save_dialog: *util.IFileSaveDialog = @ptrCast(@alignCast(dialog));
 
-                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.uuidof(), &save_as_item);
-                if (result != util.S_OK) return error.Win32Error;
-
-                if (save_as_item) |df| {
-                    try file_save_dialog.setSaveAs(@as(*util.shobjidl.IShellItem, @ptrCast(@alignCast(df))));
-                }
-            }
-
-            try configureFileDialog(allo, &file_save_dialog, opts);
+            try configureFileDialog(allo, file_save_dialog, opts);
 
             var options = try file_save_dialog.getOptions();
-            options.hide_pinned_places = !opts.show_pinned;
-            options.force_show_hidden = opts.show_hidden;
-            options.create_prompt = opts.prompt_on_create;
+            options.CREATEPROMPT = opts.prompt_on_create;
             try file_save_dialog.setOptions(@bitCast(options));
 
             file_save_dialog.show(null) catch |e| switch (e) {
@@ -389,14 +373,12 @@ pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const
                 else => return e
             };
 
-            const item = try file_save_dialog.getResult() orelse return null;
-            defer item.release() catch {};
+            const item = try file_save_dialog.getResult();
+            defer _ = item.release() catch {};
 
-            if (try item.getDisplayName()) |name| {
-                defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
-                return try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
-            }
-            return null;
+            const name = try item.getDisplayName(.DESKTOPABSOLUTEPARSING);
+            defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
+            return try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
         },
         else => @compileError("platform not supported")
     }
@@ -412,19 +394,31 @@ pub fn color(options: ColorOptions) !?Color {
     switch (builtin.os.tag) {
         .windows => {
             const util = @import("windows/util.zig");
-            var default_custom: [16]Color = [_]Color{ .white } ** 16;
+            var custom_colors: [16]u32 = [_]u32{ 0x00FFFFFF } ** 16;
+            if (options.custom) |custom| {
+                for (custom, 0..) |c, i| {
+                    custom_colors[i] = @bitCast(c);
+                }
+            }
 
             var cc: util.CHOOSECOLORA = std.mem.zeroes(util.CHOOSECOLORA);
             cc.lStructSize = @sizeOf(util.CHOOSECOLORA);
             cc.hwndOwner = @ptrCast(@alignCast(options.owner));
-            cc.lpCustColors = if (options.custom) |custom| custom[0..].ptr else default_custom[0..].ptr;
-            cc.rgbResult = options.initial;
-            cc.Flags = .{ .rgb_init = true, .full_open = true };
+            cc.lpCustColors = @ptrCast(@alignCast(custom_colors[0..].ptr));
+            cc.rgbResult = @bitCast(options.initial);
+            cc.Flags = @bitCast(util.CC{ .rgb_init = true, .full_open = true });
 
             if (util.ChooseColorA(&cc) != util.TRUE) {
-                const err = util.CommDlgExtendedError();
-                _ = std.meta.intToEnum(util.CDERR, err) catch return null;
-                return error.UnknownError;
+                switch (util.CommDlgExtendedError()) {
+                    .CDERR_GENERALCODES => return null,
+                    else => return error.UnknownError,
+                }
+            }
+
+            if (options.custom) |custom| {
+                for (custom_colors, 0..) |c, i| {
+                    custom[i] = @bitCast(c);
+                }
             }
             return @bitCast(cc.rgbResult);
         },
@@ -457,37 +451,38 @@ pub fn font(allocator: std.mem.Allocator, options: FontOptions) !?Font {
 
             var lf: util.LOGFONTA = std.mem.zeroes(util.LOGFONTA);
             const caps = util.GetDeviceCaps(util.GetDC(null), .LOGPIXELSY);
-            lf.height = @intFromFloat(@round(@as(f32, @floatFromInt(options.point_size)) * @as(f32, @floatFromInt(caps)) / 72.0));
-            lf.face_name = face_name;
+            lf.lfHeight = @intFromFloat(@round(@as(f32, @floatFromInt(options.point_size)) * @as(f32, @floatFromInt(caps)) / 72.0));
+            lf.lfFaceName = face_name;
 
             var cf: util.CHOOSEFONTA = std.mem.zeroes(util.CHOOSEFONTA);
-            cf.lStructSize = @sizeOf(util.CHOOSEFONTA) + 8;
+            cf.lStructSize = @sizeOf(util.CHOOSEFONTA);
             cf.lpLogFont = &lf;
             cf.hwndOwner = @ptrCast(@alignCast(options.owner));
             cf.lpszStyle = style.ptr;
             cf.rgbColors = @bitCast(options.color);
             cf.iPointSize = options.point_size;
-            cf.Flags = .{ .screen_fonts = true, .effects = true, .init_to_log_font_struct = true, .use_style = true };
+            cf.Flags = .{ .SCREENFONTS = 1, .EFFECTS = 1, .INITTOLOGFONTSTRUCT = 1, .USESTYLE = 1 };
 
             if (util.ChooseFontA(&cf) == util.FALSE) {
-                const err = util.CommDlgExtendedError();
-                _ = std.meta.intToEnum(util.CDERR, err) catch return null;
-                return error.UnknownError;
+                switch (util.CommDlgExtendedError()) {
+                    .CDERR_GENERALCODES => return null,
+                    else => return error.UnknownError,
+                }
             }
 
-            const name_slice: []const u8 = std.mem.sliceTo(lf.face_name[0..], 0);
+            const name_slice: []const u8 = std.mem.sliceTo(lf.lfFaceName[0..], 0);
             const name = try allocator.alloc(u8, name_slice.len);
             @memcpy(name, name_slice);
 
             return .{
-                .height = @intCast(@abs(lf.height)),
-                .width = @intCast(@abs(lf.width)),
-                .point_size = @intFromFloat(@round(@as(f32, @floatFromInt(@abs(lf.height))) * 72.0 / @as(f32, @floatFromInt(caps)))),
+                .height = @intCast(@abs(lf.lfHeight)),
+                .width = @intCast(@abs(lf.lfWidth)),
+                .point_size = @intFromFloat(@round(@as(f32, @floatFromInt(@abs(lf.lfHeight))) * 72.0 / @as(f32, @floatFromInt(caps)))),
                 .color = @bitCast(cf.rgbColors),
-                .weight = @intCast(lf.weight),
-                .italic = lf.italic == 1,
-                .underline = lf.underline == 1,
-                .strikeout = lf.strikeout == 1,
+                .weight = @intCast(lf.lfWeight),
+                .italic = lf.lfItalic == 1,
+                .underline = lf.lfUnderline == 1,
+                .strikeout = lf.lfStrikeOut == 1,
                 .name = name,
             };
         },
