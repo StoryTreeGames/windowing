@@ -55,7 +55,7 @@ pub fn main() !void {
     var app = App.init();
     defer app.deinit();
 
-    var event_loop = try EventLoop(App).init(allocator, &app);
+    var event_loop = try EventLoop(App).init(allocator, "storytree.core", &app);
     defer event_loop.deinit();
 
     while (event_loop.isActive()) {

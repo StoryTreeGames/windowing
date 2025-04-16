@@ -182,7 +182,7 @@ fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: a
                 const path = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.folder);
                 var default_folder: *anyopaque = undefined;
 
-                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.uuid(), &default_folder);
+                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.UUID, &default_folder);
                 if (result != util.S_OK) return error.Win32Error;
                 try dialog.setFolder(@ptrCast(@alignCast(default_folder)));
             }
@@ -270,7 +270,7 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
                 &util.CLSID_FileOpenDialog,
                 null,
                 util.CLSCTX_ALL,
-                &util.IFileOpenDialog.uuid(),
+                &util.IFileOpenDialog.UUID,
                 &dialog
             ) != util.S_OK) return error.CoCreateInstanceFailure;
 
@@ -356,7 +356,7 @@ pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const
                 &util.CLSID_FileSaveDialog,
                 null,
                 util.CLSCTX_ALL,
-                &util.IFileSaveDialog.uuid(),
+                &util.IFileSaveDialog.UUID,
                 &dialog
             ) != util.S_OK) return error.CoCreateInstanceFailure;
 

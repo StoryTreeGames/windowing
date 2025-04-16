@@ -281,20 +281,34 @@ pub fn EventLoop(S: type) type {
     return struct {
         arena: std.heap.ArenaAllocator,
         state: *S,
+
+        identifier: if (builtin.os.tag == .windows) [:0]const u16 else void,
+
         handler: EventHandler,
         windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
 
-        pub fn init(allocator: std.mem.Allocator, state: *S) !*@This() {
+        pub fn init(allocator: std.mem.Allocator, identifier: []const u8, state: *S) !*@This() {
             var arena = std.heap.ArenaAllocator.init(allocator);
             errdefer arena.deinit();
 
             const allo = arena.allocator();
+
+            const id = switch (builtin.os.tag) {
+                .windows => try std.unicode.utf8ToUtf16LeAllocZ(allo, identifier),
+                else => {}
+            };
+
+            switch (builtin.os.tag) {
+                .windows => try @import("windows/event.zig").EventLoop(S).setup(id),
+                else => @compileError("platform not supported")
+            }
 
             // Type erased event handler that propagates the os specific event back to the event_loop
             const el = try allo.create(@This());
             el.* = .{
                 .arena = arena,
                 .state = state,
+                .identifier = id,
                 .handler = EventHandler {
                     .inner = el,
                     .state = state,

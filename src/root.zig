@@ -1,3 +1,4 @@
+const std = @import("std");
 pub const Window = @import("window.zig");
 pub const cursor = @import("cursor.zig");
 pub const icon = @import("icon.zig");

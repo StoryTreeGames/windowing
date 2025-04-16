@@ -3,6 +3,7 @@ const event = @import("../event.zig");
 
 const Event = event.Event;
 const EventHandler = event.EventHandler;
+const util = @import("./util.zig");
 
 pub fn EventLoop(S: type) type {
     return struct {
@@ -25,6 +26,10 @@ pub fn EventLoop(S: type) type {
                 return true;
             }
             return false;
+        }
+
+        pub fn setup(id: [:0]const u16) !void {
+            if (util.SetCurrentProcessExplicitAppUserModelID(id.ptr) != util.S_OK) return error.UnknownError;
         }
     };
 }

@@ -33,9 +33,6 @@ pub const CoUninitialize = win32.system.com.CoUninitialize;
 pub const CoTaskMemFree = win32.system.com.CoTaskMemFree;
 pub const CoCreateInstance = win32.system.com.CoCreateInstance;
 
-pub const RoInitialize = win32.system.win_rt.RoInitialize;
-pub const RoUninitialize = win32.system.win_rt.RoUninitialize;
-
 pub const CHOOSECOLORA = win32.ui.controls.dialogs.CHOOSECOLORA;
 pub const LOGFONTA = win32.graphics.gdi.LOGFONTA;
 pub const CHOOSEFONTA = win32.ui.controls.dialogs.CHOOSEFONTA;
@@ -64,6 +61,7 @@ pub const CLSID_FileSaveDialog: Guid = .{ .Ints = .{
 }};
 
 pub extern "shell32" fn SHCreateItemFromParsingName(pszPath: [*:0]const u16, pbc: ?*anyopaque, riid: *const Guid, ppv: **anyopaque) HRESULT;
+pub extern "shell32" fn SetCurrentProcessExplicitAppUserModelID([*:0]const u16) HRESULT;
 
 /// Allocate a sentinal utf16 string from a utf8 string
 pub fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) ![:0]u16 {
@@ -526,22 +524,20 @@ pub const IFileDialog = extern struct {
 };
 
 pub const IFileOpenDialog = extern struct {
-    const VTable = extern struct {
+    pub const VTable = extern struct {
         base: IFileDialog.VTable,
         GetResults: *const fn (*IFileOpenDialog, **IShellItemArray) callconv(.c) HRESULT,
         GetSelectedItems: *const fn (*IFileOpenDialog, **IShellItemArray) callconv(.c) HRESULT,
     };
 
-    vtable: *const VTable,
+    pub const UUID: Guid = .{ .Ints = .{
+        .a = 0xd57c7288,
+        .b = 0xd4ad,
+        .c = 0x4768,
+        .d = .{ 0xbe, 0x02, 0x9d, 0x96, 0x95, 0x32, 0xd9, 0x60 },
+    }};
 
-    pub inline fn uuid() Guid {
-        return .{ .Ints = .{
-            .a = 0xd57c7288,
-            .b = 0xd4ad,
-            .c = 0x4768,
-            .d = .{ 0xbe, 0x02, 0x9d, 0x96, 0x95, 0x32, 0xd9, 0x60 },
-        }};
-    }
+    vtable: *const VTable,
 
     pub fn setFolder(self: *@This(), item: *IShellItem) !void {
         const this: *IFileDialog = @ptrCast(@alignCast(self));
@@ -603,16 +599,14 @@ pub const IFileSaveDialog = extern struct {
         ApplyProperties: *const fn (*IFileSaveDialog, *IShellItem, *IPropertyStore, ?HWND, *IFileOperationProgressSink) callconv(.c) HRESULT,
     };
 
-    vtable: *const VTable,
+    pub const UUID: Guid = .{ .Ints = .{
+        .a = 0x84bccd23,
+        .b = 0x5fde,
+        .c = 0x4cdb,
+        .d = .{ 0xae, 0xa4, 0xaf, 0x64, 0xb8, 0x3d, 0x78, 0xab }
+    }};
 
-    pub inline fn uuid() Guid {
-        return .{ .Ints = .{
-            .a = 0x84bccd23,
-            .b = 0x5fde,
-            .c = 0x4cdb,
-            .d = .{ 0xae, 0xa4, 0xaf, 0x64, 0xb8, 0x3d, 0x78, 0xab }
-        }};
-    }
+    vtable: *const VTable,
 
     pub fn setFolder(self: *@This(), item: *IShellItem) !void {
         const this: *IFileDialog = @ptrCast(@alignCast(self));
@@ -669,16 +663,15 @@ pub const IShellItem = extern struct {
         GetAttributes: *const fn (*IShellItem, SFGAO, *SFGAO) callconv(.c) HRESULT,
         Compare: *const fn (*IShellItem, *IShellItem, SICHINTF, *c_int) callconv(.c) HRESULT,
     };
-    vtable: *const VTable,
 
-    pub inline fn uuid() Guid { 
-        return .{ .Ints = .{
-            .a = 0x43826d1e,
-            .b = 0xe718,
-            .c = 0x42ee,
-            .d = .{ 0xbc, 0x55, 0xa1, 0xe2, 0x61, 0xc3, 0x7b, 0xfe },
-        }};
-    }
+    pub const UUID: Guid = .{ .Ints = .{
+        .a = 0x43826d1e,
+        .b = 0xe718,
+        .c = 0x42ee,
+        .d = .{ 0xbc, 0x55, 0xa1, 0xe2, 0x61, 0xc3, 0x7b, 0xfe },
+    }};
+
+    vtable: *const VTable,
 
     pub fn getParent(self: *@This()) !?*IShellItem {
         var parent: *IShellItem = undefined;
@@ -757,4 +750,52 @@ pub const IShellItemArray = extern struct {
         if (result != S_OK) return error.UnknownError;
         return @intCast(count);
     }
+};
+
+pub const IToastNotificationManagerStatics = extern struct {
+    pub const VTable = extern struct {};
+    pub const UUID: Guid = .{
+        .a = 0x50ac103f,
+        .b = 0xd235,
+        .c = 0x4598,
+        .d = .{ 0xbb, 0xef, 0x98, 0xfe, 0x4d, 0x1a, 0x3a, 0xd4 },
+    };
+
+    vtable: *const VTable,
+};
+
+pub const IToastNotificationFactory = extern struct {
+    pub const VTable = extern struct {};
+    pub const UUID: Guid = .{
+        .a = 0x04124b20,
+        .b = 0x82c6,
+        .c = 0x4229,
+        .d = .{ 0xb1, 0x09, 0xfd, 0x9e, 0xd4, 0x66, 0x2b, 0x53 },
+    };
+
+    vtable: *const VTable,
+};
+
+pub const IXmlDocument = extern struct {
+    pub const VTable = extern struct {};
+    pub const UUID: Guid = .{
+        .a = 0xf7f3a506,
+        .b = 0x1e87,
+        .c = 0x42d6,
+        .d = .{ 0xbc, 0xfb, 0xb8, 0xc8, 0x09, 0xfa, 0x54, 0x94 },
+    };
+
+    vtable: *const VTable,
+};
+
+pub const IXmlDocumentIO = extern struct {
+    pub const VTable = extern struct {};
+    pub const UUID: Guid = .{
+        .a = 0x6cd0e74e,
+        .b = 0xee65,
+        .c = 0x4489,
+        .d = .{ 0x9e, 0xbf, 0xca, 0x43, 0xe8, 0x7b, 0xa6, 0x37 },
+    };
+
+    vtable: *const VTable,
 };
