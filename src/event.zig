@@ -62,6 +62,21 @@ pub const SizeEvent = struct {
     height: u32,
 };
 
+pub const MenuEvent = struct {
+    id: u32,
+    menu: *anyopaque,
+
+    pub fn toggle(self: *@This(), state: bool) void {
+        switch (builtin.os.tag) {
+            .windows => {
+                const wam = @import("win32").ui.windows_and_messaging;
+                wam.CheckMenuItem(@ptrCast(@alignCast(self.menu)), self.id, if (state) 0x8 else 0x0);
+            },
+            else => @compileError("platform not supported")
+        }
+    }
+};
+
 pub const Event = union(enum) {
     /// Repaint request
     repaint,
@@ -79,6 +94,8 @@ pub const Event = union(enum) {
     mouse_move: Point(u16),
     /// Mouse scroll event post
     mouse_scroll: ScrollEvent,
+    /// Menu item event
+    menu: MenuEvent,
 
     pub usingnamespace switch (builtin.os.tag) {
         .windows => struct {
@@ -137,6 +154,16 @@ pub const Event = union(enum) {
                         _ = windows_and_messaging.SetCursor(Window.Inner.getHCursor(win.inner.cursor));
                         // Allow for resize cursor to be drawn if cursor is at correct position
                         // return windows_and_messaging.DefWindowProcW(hwnd, msg, wparam, lparam);
+                    },
+                    windows_and_messaging.WM_COMMAND => {
+                        const wmId: u16 = @truncate(wparam);
+                        const wmEvent: u16 = @truncate(wparam >> 16);
+                        if (wmEvent == 0) {
+                            return Event{.menu = .{
+                                .id = @intCast(wmId),
+                                .menu = undefined,
+                            }};
+                        }
                     },
                     // Keyboard input events
                     windows_and_messaging.WM_CHAR, windows_and_messaging.WM_SYSCHAR => {
