@@ -4,6 +4,7 @@ const Rect = @import("root.zig").Rect;
 const Icon = @import("icon.zig").Icon;
 const Cursor = @import("cursor.zig").Cursor;
 const EventHandler = @import("event.zig").EventHandler;
+const MenuItem = @import("menu.zig").Item;
 
 pub const Inner = switch (@import("builtin").os.tag) {
     .windows => @import("windows/window.zig"),
@@ -36,12 +37,12 @@ arena: std.heap.ArenaAllocator,
 inner: *Inner,
 alive: bool,
 
-pub fn init(allocator: std.mem.Allocator, options: Options, handler: *EventHandler) !@This() {
+pub fn init(allocator: std.mem.Allocator, options: Options, menu: ?[]const MenuItem, handler: *EventHandler) !@This() {
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
 
     return .{
-        .inner = try Inner.init(arena.allocator(), options, handler),
+        .inner = try Inner.init(arena.allocator(), options, menu, handler),
         .alive = true,
         .arena = arena,
     };

@@ -6,6 +6,7 @@ const input = @import("input.zig");
 const Key = input.Key;
 const MouseButton = input.MouseButton;
 const Point = @import("root.zig").Point;
+const MenuItem = @import("menu.zig").Item;
 
 pub const Modifiers = packed struct(u3) {
     ctrl: bool = false,
@@ -384,12 +385,12 @@ pub fn EventLoop(S: type) type {
             self.arena.deinit();
         }
 
-        pub fn createWindow(self: *@This(), opts: Window.Options) !*Window {
+        pub fn createWindow(self: *@This(), opts: Window.Options, menu: ?[]const MenuItem) !*Window {
             const allocator = self.arena.allocator();
 
             const win = try allocator.create(Window);
             errdefer allocator.destroy(win);
-            win.* = try .init(self.arena.allocator(), opts, &self.handler);
+            win.* = try .init(self.arena.allocator(), opts, menu, &self.handler);
 
             try self.windows.put(allocator, win.id(), win);
             return win;
