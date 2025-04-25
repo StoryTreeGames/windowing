@@ -6,6 +6,7 @@ const _menu = @import("../menu.zig");
 const MenuInfo = _menu.Info;
 const MenuItem = _menu.Item;
 const MenuCheckable = _menu.Checkable;
+const MenuAction = _menu.Action;
 
 const win32 = @import("win32");
 const foundation = win32.foundation;
@@ -63,28 +64,34 @@ pub const MenuContext = struct {
         }
     }
 
-    pub fn appendAction(self: *@This(), name: [:0]const u8) !void {
+    pub fn appendAction(self: *@This(), action: MenuAction) !void {
         self.count.* += 1;
+        const label = try self.allocator.allocSentinel(u8, action.label.len, 0);
+        @memcpy(label, action.label);
         try self.itemToMenu.put(self.allocator, self.count.*, .{
+            .id = action.id,
             .menu = @ptrCast(self.current),
-            .payload = .action
+            .payload = .{ .action = .{ .label = label }},
         });
-        if (windows_and_messaging.AppendMenuA(self.current, windows_and_messaging.MF_STRING, self.count.*, name.ptr) == 0) {
+        if (windows_and_messaging.AppendMenuA(self.current, windows_and_messaging.MF_STRING, self.count.*, label.ptr) == 0) {
             return error.AppendMenuAction;
         }
     }
 
     pub fn appendToggle(self: *@This(), checkable: MenuCheckable) !void {
         self.count.* += 1;
+        const label = try self.allocator.allocSentinel(u8, checkable.label.len, 0);
+        @memcpy(label, checkable.label);
         try self.itemToMenu.put(self.allocator, self.count.*, .{
+            .id = checkable.id,
             .menu = @ptrCast(self.current),
-            .payload = .toggle
+            .payload = .{ .toggle = .{ .label = label }}
         });
         if (windows_and_messaging.AppendMenuA(
             self.current,
             if (checkable.default) windows_and_messaging.MF_CHECKED else windows_and_messaging.MF_UNCHECKED,
             self.count.*,
-            checkable.name.ptr
+            label.ptr
         ) == 0) {
             return error.AppendMenuToggle;
         }
@@ -101,15 +108,21 @@ pub const MenuContext = struct {
 
     pub fn appendRadioItem(self: *@This(), checkable: MenuCheckable, start: usize, end: usize) !void {
         self.count.* += 1;
+        const label = try self.allocator.allocSentinel(u8, checkable.label.len, 0);
+        @memcpy(label, checkable.label);
         try self.itemToMenu.put(self.allocator, self.count.*, .{
+            .id = checkable.id,
             .menu = @ptrCast(self.current),
-            .payload = .{ .radio = .{ start, end } }
+            .payload = .{ .radio = .{
+                .group = .{ start, end },
+                .label = label,
+            }}
         });
         if (windows_and_messaging.AppendMenuA(
             self.current,
             if (checkable.default) windows_and_messaging.MF_CHECKED else windows_and_messaging.MF_UNCHECKED,
             self.count.*,
-            checkable.name.ptr
+            label.ptr
         ) == 0) {
             return error.AppendMenuRadioItem;
         }
@@ -118,14 +131,14 @@ pub const MenuContext = struct {
     pub fn appendMenu(self: *@This(), items: []const MenuItem) !void {
         for (items) |item| {
             switch (item) {
-                .seperator => try self.appendSeperator(),
-                .action => |action| try self.appendAction(action),
-                .toggle => |toggle| try self.appendToggle(toggle),
-                .radio_group => |group| try self.appendRadioGroup(group),
-                .menu => |subMenu| {
+                .seperator_item => try self.appendSeperator(),
+                .action_item => |action| try self.appendAction(action),
+                .toggle_item => |toggle| try self.appendToggle(toggle),
+                .radio_group_item => |group| try self.appendRadioGroup(group),
+                .menu_item => |subMenu| {
                     const innerMenu = windows_and_messaging.CreatePopupMenu().?;
                     try self.menus.append(self.allocator, innerMenu);
-                    if (windows_and_messaging.AppendMenuA(self.current, windows_and_messaging.MF_POPUP, @intFromPtr(innerMenu), subMenu.name.ptr) == 0) {
+                    if (windows_and_messaging.AppendMenuA(self.current, windows_and_messaging.MF_POPUP, @intFromPtr(innerMenu), subMenu.label.ptr) == 0) {
                         return error.AppendMenuSubmenu;
                     }
 
@@ -145,8 +158,8 @@ cursor: Cursor,
 handle: foundation.HWND,
 instance: ?foundation.HINSTANCE,
 
-menus: std.ArrayListUnmanaged(HMENU),
-itemToMenu: std.AutoArrayHashMapUnmanaged(usize, MenuInfo),
+menus: std.ArrayListUnmanaged(HMENU) = .empty,
+itemToMenu: std.AutoArrayHashMapUnmanaged(usize, MenuInfo) = .empty,
 
 pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
     var buf: [4]u8 = undefined;
@@ -178,7 +191,6 @@ pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, 
 pub fn init(
     allocator: std.mem.Allocator,
     options: Win.Options,
-    menu: ?[]const MenuItem,
     handler: *EventHandler,
 ) !*@This() {
     const win = try allocator.create(@This());
@@ -269,28 +281,6 @@ pub fn init(
         .MAXIMIZE = @intFromBool(options.show == .maximize),
     };
 
-    var menus = std.ArrayListUnmanaged(HMENU).empty;
-    var itemToMenu = std.AutoArrayHashMapUnmanaged(usize, MenuInfo).empty;
-
-    var rootMenu: ?HMENU = null;
-    if (menu) |userMenu| {
-        if (userMenu.len > 0) {
-            rootMenu = windows_and_messaging.CreateMenu().?;
-            try menus.append(allocator, rootMenu.?);
-
-            var count: usize = 0;
-            var context = MenuContext {
-                .allocator = allocator,
-                .current = rootMenu.?,
-                .menus = &menus,
-                .itemToMenu = &itemToMenu,
-                .count = &count,
-            };
-
-            try context.appendMenu(userMenu);
-        }
-    }
-
     const hwnd = windows_and_messaging.CreateWindowExW(
         windows_and_messaging.WINDOW_EX_STYLE{},
         class.ptr,
@@ -301,7 +291,7 @@ pub fn init(
         if (options.width) |width| @intCast(width) else windows_and_messaging.CW_USEDEFAULT,
         if (options.height) |height| @intCast(height) else windows_and_messaging.CW_USEDEFAULT, // initial size
         null, // Parent
-        rootMenu, // Menu
+        null, // Menu
         instance,
         @ptrCast(handler), // WM_CREATE lpParam
     ) orelse return error.SystemCreateWindow;
@@ -322,8 +312,6 @@ pub fn init(
         .icon = icon,
         .cursor = cursor,
         .handle = hwnd,
-        .menus = menus,
-        .itemToMenu = itemToMenu,
         .instance = instance,
     };
 
@@ -332,9 +320,7 @@ pub fn init(
 
 pub fn deinit(self: *@This()) void {
     windows_and_messaging.DestroyWindow(self.handle);
-    for (self.menus.items) |m| {
-        _ = windows_and_messaging.DestroyMenu(m);
-    }
+    for (self.menus.items) |m| _ = windows_and_messaging.DestroyMenu(m);
 }
 
 pub fn id(self: *const @This()) usize {
@@ -516,6 +502,42 @@ pub fn getHIcon(icon: Icon) ?windows_and_messaging.HICON {
     };
 }
 
+pub fn setMenu(self: *@This(), allocator: std.mem.Allocator, new_menu: ?[]const MenuItem) !void {
+    for (self.menus.items) |m| _ = windows_and_messaging.DestroyMenu(m);
+    for (self.itemToMenu.values()) |v| switch (v.payload) {
+        .toggle => |t| allocator.free(t.label),
+        .action => |a| allocator.free(a.label),
+        .radio => |r| allocator.free(r.label),
+    };
+    self.menus.clearAndFree(allocator);
+    self.itemToMenu.clearAndFree(allocator);
+
+    var rootMenu: ?HMENU = null;
+    if (new_menu) |userMenu| {
+        if (userMenu.len > 0) {
+            rootMenu = windows_and_messaging.CreateMenu().?;
+            try self.menus.append(allocator, rootMenu.?);
+
+            var count: usize = 0;
+            var context = MenuContext {
+                .allocator = allocator,
+                .current = rootMenu.?,
+                .menus = &self.menus,
+                .itemToMenu = &self.itemToMenu,
+                .count = &count,
+            };
+
+            try context.appendMenu(userMenu);
+
+            _ = windows_and_messaging.SetMenu(self.handle, rootMenu);
+            _ = windows_and_messaging.DrawMenuBar(self.handle);
+            return;
+        }
+    }
+    _ = windows_and_messaging.SetMenu(self.handle, null);
+    _ = windows_and_messaging.DrawMenuBar(self.handle);
+}
+
 fn wndProc(
     hwnd: foundation.HWND,
     uMsg: u32,
@@ -560,4 +582,4 @@ fn wndProc(
     }
 
     return 0;
-
+}

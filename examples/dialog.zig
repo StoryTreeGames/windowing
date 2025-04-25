@@ -17,7 +17,6 @@ pub fn main() !void {
 
     if (true) {
         const result = try core.dialog.open(allocator, .{
-            .folder = "C:\\Users\\zboehm",
             .filters = &.{
                 .{ "All types (*.*)", "*.*" },
                 .{ "Text (*.txt)", "*.txt" },
@@ -36,7 +35,6 @@ pub fn main() !void {
 
     if (true) {
         const result = try core.dialog.save(allocator, .{
-            .folder = "C:\\Users\\zboehm",
             .file_name = "sample.txt",
             .filters = &.{
                 .{ "All types (*.*)", "*.*" },

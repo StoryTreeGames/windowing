@@ -7,6 +7,7 @@ const Key = input.Key;
 const MouseButton = input.MouseButton;
 const Point = @import("root.zig").Point;
 const MenuItem = @import("menu.zig").Item;
+const MenuInfo = @import("menu.zig").Info;
 
 pub const Modifiers = packed struct(u3) {
     ctrl: bool = false,
@@ -65,13 +66,21 @@ pub const SizeEvent = struct {
 
 pub const MenuEvent = struct {
     id: u32,
-    menu: *anyopaque,
+    item: *MenuInfo,
 
-    pub fn toggle(self: *@This(), state: bool) void {
+    pub fn toggle(self: *const @This(), state: bool) void {
         switch (builtin.os.tag) {
             .windows => {
                 const wam = @import("win32").ui.windows_and_messaging;
-                wam.CheckMenuItem(@ptrCast(@alignCast(self.menu)), self.id, if (state) 0x8 else 0x0);
+                switch (self.item.payload) {
+                    .toggle => {
+                        _ = wam.CheckMenuItem(@ptrCast(@alignCast(self.item.menu)), self.id, if (state) 0x8 else 0x0);
+                    },
+                    .radio => |r| {
+                        _ = wam.CheckMenuRadioItem(@ptrCast(@alignCast(self.item.menu)), @intCast(r.group[0]), @intCast(r.group[0]), self.id, 0x0);
+                    },
+                    else => {}
+                }
             },
             else => @compileError("platform not supported")
         }
@@ -160,10 +169,13 @@ pub const Event = union(enum) {
                         const wmId: u16 = @truncate(wparam);
                         const wmEvent: u16 = @truncate(wparam >> 16);
                         if (wmEvent == 0) {
-                            return Event{.menu = .{
-                                .id = @intCast(wmId),
-                                .menu = undefined,
-                            }};
+                            const menu_info = win.inner.itemToMenu.getPtr(@intCast(wmId));
+                            if (menu_info) |info| {
+                                return Event{.menu = .{
+                                    .id = @intCast(wmId),
+                                    .item = info,
+                                }};
+                            }
                         }
                     },
                     // Keyboard input events
@@ -385,12 +397,12 @@ pub fn EventLoop(S: type) type {
             self.arena.deinit();
         }
 
-        pub fn createWindow(self: *@This(), opts: Window.Options, menu: ?[]const MenuItem) !*Window {
+        pub fn createWindow(self: *@This(), opts: Window.Options) !*Window {
             const allocator = self.arena.allocator();
 
             const win = try allocator.create(Window);
             errdefer allocator.destroy(win);
-            win.* = try .init(self.arena.allocator(), opts, menu, &self.handler);
+            win.* = try .init(allocator, opts, &self.handler);
 
             try self.windows.put(allocator, win.id(), win);
             return win;
