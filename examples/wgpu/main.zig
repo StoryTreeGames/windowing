@@ -1,6 +1,8 @@
 // This example is derived from the wgpu-native-zig's test repository to ensure
 // that the library works with windows. This just replaces the win32 code with
 // this libraries windowing logic.
+//
+// https://github.com/bronter/wgpu-native-zig-windows-test
 
 const std = @import("std");
 const Renderer = @import("renderer.zig");

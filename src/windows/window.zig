@@ -18,9 +18,11 @@ const zig = win32.zig;
 const dwm = win32.graphics.dwm;
 
 const util = @import("util.zig");
-const ico = @import("../icon.zig");
-const csr = @import("../cursor.zig");
+const ico = @import("icon.zig");
+const csr = @import("cursor.zig");
 
+const IconType = @import("../icon.zig").IconType;
+const CursorType = @import("../cursor.zig").CursorType;
 const Win = @import("../window.zig");
 const EventHandler = @import("../event.zig").EventHandler;
 
@@ -28,12 +30,12 @@ const HMENU = windows_and_messaging.HMENU;
 const WINAPI = std.os.windows.WINAPI;
 
 const Icon = union(enum) {
-    icon: ico.IconType,
+    icon: IconType,
     custom: [:0]const u16,
 };
 
 const Cursor = union(enum) {
-    icon: csr.CursorType,
+    icon: CursorType,
     custom: struct {
         path: [:0]const u16,
         width: i32,
@@ -301,8 +303,15 @@ pub fn init(
     switch (options.theme) {
         .dark => value = zig.TRUE,
         .light => value = zig.FALSE,
+        // TODO: Add helper method to check systems current color mode
         .system => value = zig.TRUE,
     }
+
+    // TODO: Add method to toggle dark mode
+    // TODO: Add listener for system color mode change if set to `Auto` to change the theme
+    // TODO: Make menu bar color match title bar color
+    //
+    //  All of these require winrt mappings
     _ = dwm.DwmSetWindowAttribute(hwnd, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &value, @sizeOf(foundation.BOOL));
     _ = windows_and_messaging.ShowWindow(hwnd, windows_and_messaging.SW_SHOWDEFAULT);
 

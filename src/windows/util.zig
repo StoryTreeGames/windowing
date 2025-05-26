@@ -752,50 +752,115 @@ pub const IShellItemArray = extern struct {
     }
 };
 
-pub const IToastNotificationManagerStatics = extern struct {
-    pub const VTable = extern struct {};
-    pub const UUID: Guid = .{
-        .a = 0x50ac103f,
-        .b = 0xd235,
-        .c = 0x4598,
-        .d = .{ 0xbb, 0xef, 0x98, 0xfe, 0x4d, 0x1a, 0x3a, 0xd4 },
-    };
+pub const Size = extern struct {
+    width: usize,
+    height: usize,
+};
 
+pub const HandPreference = enum(i32) {
+    LeftHanded = 0,
+    RightHanded = 1,
+};
+
+pub const UIColorType = enum(i32) {
+    Background = 0,
+    Foreground = 1,
+    AccentDark3 = 2,
+    AccentDark2 = 3,
+    AccentDark1 = 4,
+    Accent = 5,
+    AccentLight1 = 6,
+    AccentLight2 = 7,
+    AccentLight3 = 8,
+    Complement = 9,
+};
+
+pub const UIElementType = enum(u32) {
+    ActiveCaption = 0,
+    Background = 1,
+    ButtonFace = 2,
+    ButtonText = 3,
+    CaptionText = 4,
+    GrayText = 5,
+    Highlight = 6,
+    HighlightText = 7,
+    Hotlight = 8,
+    InactiveCaption = 9,
+    InactiveCaptionText = 10,
+    Window = 11,
+    WindowText = 12,
+    AccentColor = 1000,
+    TextHigh = 1001,
+    TextMedium = 1002,
+    TextLow = 1003,
+    TextContrastWithHigh = 1004,
+    NonTextHigh = 1005,
+    NonTextMediumHigh = 1006,
+    NonTextMedium = 1007,
+    NonTextMediumLow = 1008,
+    NonTextLow = 1009,
+    PageBackground = 1010,
+    PopupBackground = 1011,
+    OverlayOutsidePopup = 1012,
+};
+
+const Type = *opaque{};
+pub const Object = extern struct {
+    pub const VTable = extern struct {
+        Equals: *const fn(*Object, *Object) callconv(.c) bool,
+        Finalize: *const fn(*Object) callconv(.c) void,
+        GetHashCode: *const fn(*Object) callconv(.c) i32,
+        GetType: *const fn(*Object, *Object) callconv(.c) Type,
+        MemberwiseClone: *const fn(*Object) callconv(.c) Object,
+        ReferenceEquals: *const fn(*Object, *Object) callconv(.c) bool,
+        ToString: *const fn(*Object) callconv(.c) ?[*:0]u8,
+    };
     vtable: *const VTable,
 };
 
-pub const IToastNotificationFactory = extern struct {
-    pub const VTable = extern struct {};
-    pub const UUID: Guid = .{
-        .a = 0x04124b20,
-        .b = 0x82c6,
-        .c = 0x4229,
-        .d = .{ 0xb1, 0x09, 0xfd, 0x9e, 0xd4, 0x66, 0x2b, 0x53 },
+pub const UISettings = extern struct {
+    pub const VTable = extern struct {
+        base: Object.VTable,
+        HandPreference: *const fn(*UISettings, *HandPreference) callconv(.c) HRESULT,
+        CursorSize: *const fn(*UISettings, *win32.foundation.SIZE) callconv(.c) HRESULT,
+        ScrollBarSize: *const fn(*UISettings) callconv(.c) Size,
+
+        AdvancedEffectsEnabled: *const fn(*UISettings) callconv(.c) bool,
+        AnimationsEnabled: *const fn(*UISettings) callconv(.c) bool,
+        AutoHideSCrollBars: *const fn(*UISettings) callconv(.c) bool,
+        CaretBlinkRate: *const fn(*UISettings) callconv(.c) u32,
+        CaretBrowsingEnabled: *const fn(*UISettings) callconv(.c) bool,
+        CaretWidth: *const fn(*UISettings) callconv(.c) u32,
+        DoubleClickTime: *const fn(*UISettings) callconv(.c) u32,
+        MessageDuration: *const fn(*UISettings) callconv(.c) u32,
+        MouseHoverTime: *const fn(*UISettings) callconv(.c) u32,
+        ScrollBarArrowSize: *const fn(*UISettings) callconv(.c) Size,
+        ScrollBarThumbBoxSize: *const fn(*UISettings) callconv(.c) Size,
+        TextScaleFactor: *const fn(*UISettings) callconv(.c) f32,
+
+        GetColorValue: *const fn (*UISettings, u32) callconv(.c) extern struct { A: u8, B: u8, G: u8, R: u8 },
+        UIElementColor: *const fn (*UISettings, u32) callconv(.c) extern struct { A: u8, B: u8, G: u8, R: u8 },
     };
 
     vtable: *const VTable,
-};
+    AdvancedEffectsEnabledChange: *const fn(*UISettings, ?*Object) callconv(.c) void,
+    AnimationsEnabledChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
+    AutoHideScrollBarsChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
+    ColorValuesChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
+    MessageDurationChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
+    TextScaleFactorChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
 
-pub const IXmlDocument = extern struct {
-    pub const VTable = extern struct {};
-    pub const UUID: Guid = .{
-        .a = 0xf7f3a506,
-        .b = 0x1e87,
-        .c = 0x42d6,
-        .d = .{ 0xbc, 0xfb, 0xb8, 0xc8, 0x09, 0xfa, 0x54, 0x94 },
-    };
+    pub fn init(self: *@This()) void {
+        self.vtable.*.UISettings(self);
+    }
 
-    vtable: *const VTable,
-};
-
-pub const IXmlDocumentIO = extern struct {
-    pub const VTable = extern struct {};
-    pub const UUID: Guid = .{
-        .a = 0x6cd0e74e,
-        .b = 0xee65,
-        .c = 0x4489,
-        .d = .{ 0x9e, 0xbf, 0xca, 0x43, 0xe8, 0x7b, 0xa6, 0x37 },
-    };
-
-    vtable: *const VTable,
+    pub fn getColorValue(self: *@This(), color_type: UIColorType) Color {
+        const color = self.vtable.*.GetColorValue(self, @intFromEnum(color_type));
+        return .{
+            .red = color.R,
+            .green = color.G,
+            .blue = color.B,
+            .alpha = color.A,
+        };
+    }
 };

@@ -35,7 +35,7 @@ pub const Color = packed struct(u32) {
     red: u8 = 0,
     green: u8 = 0,
     blue: u8 = 0,
-    _alpha: u8 = 0,
+    alpha: u8 = 0,
 
     pub const white: @This() = .{ .red = 255, .green = 255, .blue = 255 };
 };
