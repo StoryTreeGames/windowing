@@ -1,6 +1,7 @@
 const std = @import("std");
 const uuid = @import("uuid");
 const win32 = @import("win32");
+const registry = win32.system.registry;
 
 const Color = @import("../root.zig").Color;
 
@@ -10,6 +11,7 @@ pub const GetDeviceCaps = win32.graphics.gdi.GetDeviceCaps;
 
 pub const HWND = win32.foundation.HWND;
 pub const HINSTANCE = win32.foundation.HINSTANCE;
+pub const RECT = win32.foundation.RECT;
 pub const BOOL = win32.foundation.BOOL;
 pub const HRESULT = win32.foundation.HRESULT;
 
@@ -62,6 +64,29 @@ pub const CLSID_FileSaveDialog: Guid = .{ .Ints = .{
 
 pub extern "shell32" fn SHCreateItemFromParsingName(pszPath: [*:0]const u16, pbc: ?*anyopaque, riid: *const Guid, ppv: **anyopaque) HRESULT;
 pub extern "shell32" fn SetCurrentProcessExplicitAppUserModelID([*:0]const u16) HRESULT;
+
+pub fn isLightTheme() error{ RegRead, RegNotFound, SystemError }!bool {
+    var data_type: u32 = 0;
+    var data: [4:0]u8 = [_:0]u8{0} ** 4;
+    var length: u32 = 4;
+
+    const code = registry.RegGetValueA(
+        registry.HKEY_CURRENT_USER,
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "AppsUseLightTheme",
+        registry.RRF_RT_REG_DWORD,
+        &data_type,
+        @ptrCast(@alignCast(&data)),
+        &length,
+    );
+
+    switch (code) {
+        .NO_ERROR => return data[0] == 1,
+        .ERROR_MORE_DATA => return error.RegRead,
+        .ERROR_FILE_NOT_FOUND => return error.RegNotFound,
+        else => return error.SystemError,
+    }
+}
 
 /// Allocate a sentinal utf16 string from a utf8 string
 pub fn utf8ToUtf16Alloc(allocator: std.mem.Allocator, data: []const u8) ![:0]u16 {
@@ -749,118 +774,5 @@ pub const IShellItemArray = extern struct {
         const result = self.vtable.GetCount(self, &count);
         if (result != S_OK) return error.UnknownError;
         return @intCast(count);
-    }
-};
-
-pub const Size = extern struct {
-    width: usize,
-    height: usize,
-};
-
-pub const HandPreference = enum(i32) {
-    LeftHanded = 0,
-    RightHanded = 1,
-};
-
-pub const UIColorType = enum(i32) {
-    Background = 0,
-    Foreground = 1,
-    AccentDark3 = 2,
-    AccentDark2 = 3,
-    AccentDark1 = 4,
-    Accent = 5,
-    AccentLight1 = 6,
-    AccentLight2 = 7,
-    AccentLight3 = 8,
-    Complement = 9,
-};
-
-pub const UIElementType = enum(u32) {
-    ActiveCaption = 0,
-    Background = 1,
-    ButtonFace = 2,
-    ButtonText = 3,
-    CaptionText = 4,
-    GrayText = 5,
-    Highlight = 6,
-    HighlightText = 7,
-    Hotlight = 8,
-    InactiveCaption = 9,
-    InactiveCaptionText = 10,
-    Window = 11,
-    WindowText = 12,
-    AccentColor = 1000,
-    TextHigh = 1001,
-    TextMedium = 1002,
-    TextLow = 1003,
-    TextContrastWithHigh = 1004,
-    NonTextHigh = 1005,
-    NonTextMediumHigh = 1006,
-    NonTextMedium = 1007,
-    NonTextMediumLow = 1008,
-    NonTextLow = 1009,
-    PageBackground = 1010,
-    PopupBackground = 1011,
-    OverlayOutsidePopup = 1012,
-};
-
-const Type = *opaque{};
-pub const Object = extern struct {
-    pub const VTable = extern struct {
-        Equals: *const fn(*Object, *Object) callconv(.c) bool,
-        Finalize: *const fn(*Object) callconv(.c) void,
-        GetHashCode: *const fn(*Object) callconv(.c) i32,
-        GetType: *const fn(*Object, *Object) callconv(.c) Type,
-        MemberwiseClone: *const fn(*Object) callconv(.c) Object,
-        ReferenceEquals: *const fn(*Object, *Object) callconv(.c) bool,
-        ToString: *const fn(*Object) callconv(.c) ?[*:0]u8,
-    };
-    vtable: *const VTable,
-};
-
-pub const UISettings = extern struct {
-    pub const VTable = extern struct {
-        base: Object.VTable,
-        HandPreference: *const fn(*UISettings, *HandPreference) callconv(.c) HRESULT,
-        CursorSize: *const fn(*UISettings, *win32.foundation.SIZE) callconv(.c) HRESULT,
-        ScrollBarSize: *const fn(*UISettings) callconv(.c) Size,
-
-        AdvancedEffectsEnabled: *const fn(*UISettings) callconv(.c) bool,
-        AnimationsEnabled: *const fn(*UISettings) callconv(.c) bool,
-        AutoHideSCrollBars: *const fn(*UISettings) callconv(.c) bool,
-        CaretBlinkRate: *const fn(*UISettings) callconv(.c) u32,
-        CaretBrowsingEnabled: *const fn(*UISettings) callconv(.c) bool,
-        CaretWidth: *const fn(*UISettings) callconv(.c) u32,
-        DoubleClickTime: *const fn(*UISettings) callconv(.c) u32,
-        MessageDuration: *const fn(*UISettings) callconv(.c) u32,
-        MouseHoverTime: *const fn(*UISettings) callconv(.c) u32,
-        ScrollBarArrowSize: *const fn(*UISettings) callconv(.c) Size,
-        ScrollBarThumbBoxSize: *const fn(*UISettings) callconv(.c) Size,
-        TextScaleFactor: *const fn(*UISettings) callconv(.c) f32,
-
-        GetColorValue: *const fn (*UISettings, u32) callconv(.c) extern struct { A: u8, B: u8, G: u8, R: u8 },
-        UIElementColor: *const fn (*UISettings, u32) callconv(.c) extern struct { A: u8, B: u8, G: u8, R: u8 },
-    };
-
-    vtable: *const VTable,
-    AdvancedEffectsEnabledChange: *const fn(*UISettings, ?*Object) callconv(.c) void,
-    AnimationsEnabledChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
-    AutoHideScrollBarsChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
-    ColorValuesChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
-    MessageDurationChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
-    TextScaleFactorChanged: *const fn(*UISettings, ?*Object) callconv(.c) void,
-
-    pub fn init(self: *@This()) void {
-        self.vtable.*.UISettings(self);
-    }
-
-    pub fn getColorValue(self: *@This(), color_type: UIColorType) Color {
-        const color = self.vtable.*.GetColorValue(self, @intFromEnum(color_type));
-        return .{
-            .red = color.R,
-            .green = color.G,
-            .blue = color.B,
-            .alpha = color.A,
-        };
     }
 };

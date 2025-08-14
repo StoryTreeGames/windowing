@@ -24,7 +24,7 @@ pub const App = struct {
         self.renderer.release();
     }
 
-    pub fn setup(self: *@This(), event_loop: *EventLoop(App)) !void {
+    pub fn setup(self: *@This(), event_loop: *EventLoop) !void {
         const win = try event_loop.createWindow(.{
             .title = "wgpu-native-zig windows example",
             .width = 640,
@@ -37,7 +37,7 @@ pub const App = struct {
         self.renderer = try Renderer.create(win);
     }
 
-    pub fn handleEvent(self: *@This(), event_loop: *EventLoop(App), win: *Window, evt: Event) !bool {
+    pub fn handleEvent(self: *@This(), event_loop: *EventLoop, win: *Window, evt: Event) !bool {
         switch (evt) {
             .close => event_loop.closeWindow(win.id()),
             .resize => |size| self.renderer.resize(size.width, size.height),
@@ -57,7 +57,7 @@ pub fn main() !void {
     var app = App.init();
     defer app.deinit();
 
-    var event_loop = try EventLoop(App).init(allocator, "storytree.core", &app);
+    var event_loop = try EventLoop.init(allocator, "storytree.core.example.menu", App, &app);
     defer event_loop.deinit();
 
     while (event_loop.isActive()) {

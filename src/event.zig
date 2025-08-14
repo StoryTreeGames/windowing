@@ -79,10 +79,10 @@ pub const MenuEvent = struct {
                     .radio => |r| {
                         _ = wam.CheckMenuRadioItem(@ptrCast(@alignCast(self.item.menu)), @intCast(r.group[0]), @intCast(r.group[0]), self.id, 0x0);
                     },
-                    else => {}
+                    else => {},
                 }
             },
-            else => @compileError("platform not supported")
+            else => @compileError("platform not supported"),
         }
     }
 };
@@ -106,183 +106,157 @@ pub const Event = union(enum) {
     mouse_scroll: ScrollEvent,
     /// Menu item event
     menu: MenuEvent,
+    theme: enum { light, dark }
 };
 
-pub fn EventLoop(S: type) type {
-    const Handler = switch (builtin.os.tag) {
-        .windows => struct {
-            const HWND = @import("win32").foundation.HWND;
-            pub fn handler(s: *anyopaque, context: *anyopaque, hwnd: HWND, message: u32, wparam: usize, lparam: isize) bool {
-                const inner: *EventLoop(S) = @ptrCast(@alignCast(s));
-                const ctx: *S = @ptrCast(@alignCast(context));
-                if (inner.windows.get(@intFromPtr(hwnd))) |win| {
-                    if (@import("windows/event.zig").parseEvent(win, message, wparam, lparam)) |evt| {
-                        return inner.handleEvent(ctx, win, evt) catch return false;
+pub const EventLoop = struct {
+    arena: std.heap.ArenaAllocator,
+    state: *anyopaque,
+
+    identifier: if (builtin.os.tag == .windows) [:0]const u16 else void,
+
+    handler: *const fn (*EventLoop, *anyopaque, *Window, Event) anyerror!bool,
+    windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
+
+    pub fn init(allocator: std.mem.Allocator, identifier: []const u8, State: type, state: *State) !*@This() {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+
+        const allo = arena.allocator();
+
+        const Handler = struct {
+            pub fn handleEvent(event_loop: *EventLoop, data: *anyopaque, win: *Window, event: Event) !bool {
+                const s: *State = @ptrCast(@alignCast(data));
+                if (@hasDecl(State, "handleEvent")) {
+                    const func = @field(State, "handleEvent");
+                    const F = @TypeOf(func);
+                    const params = @typeInfo(F).@"fn".params;
+                    const rtrn = @typeInfo(F).@"fn".return_type.?;
+
+                    var args: std.meta.ArgsTuple(F) = undefined;
+                    inline for (params, 0..) |param, i| {
+                        args[i] = switch (param.type.?) {
+                            *Window, *const Window => win,
+                            Event => event,
+                            *State, *const State => s,
+                            *EventLoop, *const EventLoop => event_loop,
+                            else => @compileError("invalid event loop handler argument type: " ++ @typeName(State)),
+                        };
+                    }
+
+                    if (@typeInfo(rtrn) == .error_union) {
+                        return try @call(.auto, func, args);
+                    } else {
+                        return @call(.auto, func, args);
+                    }
+                }
+            }
+        };
+
+        const id = switch (builtin.os.tag) {
+            .windows => try std.unicode.utf8ToUtf16LeAllocZ(allo, identifier),
+            else => {},
+        };
+
+        switch (builtin.os.tag) {
+            .windows => try @import("windows/event.zig").EventLoop.setup(id),
+            else => @compileError("platform not supported"),
+        }
+
+        const el = try allo.create(@This());
+        el.* = .{
+            .arena = arena,
+            .state = @ptrCast(@alignCast(state)),
+            .identifier = id,
+            // Type erased event handler that propagates the os specific event back to the event_loop and state handler
+            .handler = Handler.handleEvent,
+        };
+
+        if (@hasDecl(State, "setup")) {
+            const func = @field(State, "setup");
+            const F = @TypeOf(func);
+            const params = @typeInfo(F).@"fn".params;
+            const rtrn = @typeInfo(F).@"fn".return_type.?;
+
+            var args: std.meta.ArgsTuple(F) = undefined;
+            inline for (params, 0..) |param, i| {
+                args[i] = switch (param.type.?) {
+                    *State, *const State => state,
+                    *@This(), *const @This() => el,
+                    else => @compileError("invalid event loop handler argument type: " ++ @typeName(State)),
+                };
+            }
+
+            if (@typeInfo(rtrn) == .error_union) {
+                try @call(.auto, func, args);
+            } else {
+                @call(.auto, func, args);
+            }
+        }
+
+        return el;
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.arena.deinit();
+    }
+
+    pub fn createWindow(self: *@This(), opts: Window.Options) !*Window {
+        const allocator = self.arena.allocator();
+
+        const win = try allocator.create(Window);
+        errdefer allocator.destroy(win);
+        win.* = try .init(allocator, opts, self);
+
+        try self.windows.put(allocator, win.id(), win);
+        return win;
+    }
+
+    pub fn closeWindow(self: *@This(), id: usize) void {
+        if (self.windows.get(id)) |win| {
+            win.inner.destroy();
+            win.deinit();
+            self.arena.allocator().destroy(win);
+            _ = self.windows.swapRemove(id);
+        }
+    }
+
+    pub fn isActive(self: *const @This()) bool {
+        return self.windows.count() > 0;
+    }
+
+    pub fn poll(self: *@This()) !bool {
+        _ = self;
+
+        switch (builtin.os.tag) {
+            .windows => {
+                return try @import("windows/event.zig").EventLoop.pollMessages();
+            },
+            else => @compileError("platform not supported"),
+        }
+    }
+
+    pub fn run(self: *@This()) !void {
+        switch (builtin.os.tag) {
+            .windows => {
+                try @import("windows/event.zig").EventLoop.messageLoop(self);
+            },
+            else => @compileError("platform not supported"),
+        }
+    }
+
+    pub fn handleEvent(self: *@This(), args: anytype) bool {
+        switch (builtin.os.tag) {
+            .windows => {
+                if (self.windows.get(@intFromPtr(args[0]))) |win| {
+                    const event = @import("windows/event.zig").parseEvent(win, args[0], args[1], args[2], args[3]);
+                    if (event) |e| {
+                        return self.handler(self, self.state, win, e) catch false;
                     }
                 }
                 return false;
-            }
-        },
-        else => @compileError("platform not supported")
-    };
-
-    return struct {
-        arena: std.heap.ArenaAllocator,
-        state: *S,
-
-        identifier: if (builtin.os.tag == .windows) [:0]const u16 else void,
-
-        handler: EventHandler,
-        windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
-
-        pub fn init(allocator: std.mem.Allocator, identifier: []const u8, state: *S) !*@This() {
-            var arena = std.heap.ArenaAllocator.init(allocator);
-            errdefer arena.deinit();
-
-            const allo = arena.allocator();
-
-            const id = switch (builtin.os.tag) {
-                .windows => try std.unicode.utf8ToUtf16LeAllocZ(allo, identifier),
-                else => {}
-            };
-
-            switch (builtin.os.tag) {
-                .windows => try @import("windows/event.zig").EventLoop(S).setup(id),
-                else => @compileError("platform not supported")
-            }
-
-            // Type erased event handler that propagates the os specific event back to the event_loop
-            const el = try allo.create(@This());
-            el.* = .{
-                .arena = arena,
-                .state = state,
-                .identifier = id,
-                .handler = EventHandler {
-                    .inner = el,
-                    .state = state,
-                    .handler = Handler.handler
-                }
-            };
-
-            if (@hasDecl(S, "setup")) {
-                const func = @field(S, "setup");
-                const F = @TypeOf(func);
-                const params = @typeInfo(F).@"fn".params;
-                const rtrn = @typeInfo(F).@"fn".return_type.?;
-
-                var args: std.meta.ArgsTuple(F) = undefined;
-                inline for (params, 0..) |param, i| {
-                    args[i] = switch (param.type.?) {
-                        *S, *const S => state,
-                        *@This(), *const @This() => el,
-                        else => @compileError("invalid event loop handler argument type: " ++ @typeName(S))
-                    };
-                }
-
-                if (@typeInfo(rtrn) == .error_union) {
-                    try @call(.auto, func, args);
-                } else {
-                    @call(.auto, func, args);
-                }
-            }
-
-            return el;
+            },
+            else => @compileError("platform not supported"),
         }
-
-        pub fn deinit(self: *@This()) void {
-            self.arena.deinit();
-        }
-
-        pub fn createWindow(self: *@This(), opts: Window.Options) !*Window {
-            const allocator = self.arena.allocator();
-
-            const win = try allocator.create(Window);
-            errdefer allocator.destroy(win);
-            win.* = try .init(allocator, opts, &self.handler);
-
-            try self.windows.put(allocator, win.id(), win);
-            return win;
-        }
-
-        pub fn closeWindow(self: *@This(), id: usize) void {
-            if (self.windows.get(id)) |win| {
-                win.inner.destroy();
-                win.deinit();
-                self.arena.allocator().destroy(win);
-                _ = self.windows.swapRemove(id);
-            }
-        }
-
-        pub fn isActive(self: *const @This()) bool {
-            return self.windows.count() > 0;
-        }
-
-        pub fn poll(self: *@This()) !bool {
-            _ = self;
-
-            switch (builtin.os.tag) {
-                .windows => {
-                    return try @import("windows/event.zig").EventLoop(S).pollMessages();
-                },
-                else => @compileError("platform not supported")
-            }
-        }
-
-        pub fn run(self: *@This()) !void {
-            switch (builtin.os.tag) {
-                .windows => {
-                    try @import("windows/event.zig").EventLoop(S).messageLoop(self);
-                },
-                else => @compileError("platform not supported")
-            }
-        }
-
-        pub fn handleEvent(self: *@This(), state: *S, win: *Window, event: Event) !bool {
-            if (@hasDecl(S, "handleEvent")) {
-                const func = @field(S, "handleEvent");
-                const F = @TypeOf(func);
-                const params = @typeInfo(F).@"fn".params;
-                const rtrn = @typeInfo(F).@"fn".return_type.?;
-
-                var args: std.meta.ArgsTuple(F) = undefined;
-                inline for (params, 0..) |param, i| {
-                    args[i] = switch (param.type.?) {
-                        *Window, *const Window => win,
-                        Event => event,
-                        *S, *const S => state,
-                        *@This(), *const @This() => self,
-                        else => @compileError("invalid event loop handler argument type: " ++ @typeName(S))
-                    };
-                }
-
-                if (@typeInfo(rtrn) == .error_union) {
-                    return try @call(.auto, func, args);
-                } else {
-                    return @call(.auto, func, args);
-                }
-            }
-        }
-    };
-}
-
-pub const EventHandler = struct {
-    inner: *anyopaque,
-    state: *anyopaque,
-    handler: switch (builtin.os.tag) {
-        .windows => h: {
-            const HWND = @import("win32").foundation.HWND;
-            break :h *const fn(*anyopaque, *anyopaque, hwnd: HWND, u32, usize, isize) bool;
-        },
-        else => @compileError("platform not supported")
-    },
-
-    pub usingnamespace switch (builtin.os.tag) {
-        .windows => struct {
-            const HWND = @import("win32").foundation.HWND;
-            pub fn handleEvent(self: *EventHandler, hwnd: HWND, message: u32, wparam: usize, lparam: isize) bool {
-                return self.handler(self.inner, self.state, hwnd, message, wparam, lparam);
-            }
-        },
-        else => @compileError("platform not supported")
-    };
+    }
 };

@@ -7,7 +7,7 @@ const EventLoop = event.EventLoop;
 const Event = event.Event;
 
 pub const App = struct {
-    pub fn setup(event_loop: *EventLoop(App)) !void {
+    pub fn setup(event_loop: *EventLoop) !void {
         _ = try event_loop.createWindow(.{
             .title = "Zig window 2",
             .width = 800,
@@ -17,7 +17,7 @@ pub const App = struct {
         });
     }
 
-    pub fn handleEvent(event_loop: *EventLoop(App), win: *Window, evt: Event) !bool {
+    pub fn handleEvent(event_loop: *EventLoop, win: *Window, evt: Event) !bool {
         std.debug.print("{any}\n", .{ evt });
         switch (evt) {
             .close => event_loop.closeWindow(win.id()),
@@ -34,7 +34,7 @@ pub fn main() !void {
 
     var app = App{};
 
-    var event_loop = try EventLoop(App).init(allocator, &app);
+    var event_loop = try EventLoop.init(allocator, "storytree.core.example.dev", App, &app);
     defer event_loop.deinit();
 
     // Custom debug output of window

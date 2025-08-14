@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const windows_and_messaging = @import("win32").ui.windows_and_messaging;
+const graphics = @import("win32").graphics;
+const foundation = @import("win32").foundation;
 const keyboard_and_mouse = @import("win32").ui.input.keyboard_and_mouse;
 const zig = @import("win32").zig;
 
@@ -12,7 +14,6 @@ const Window = @import("../window.zig");
 const Modifiers = event.Modifiers;
 const Event = event.Event;
 const EventHandler = event.EventHandler;
-
 
 const VIRTUAL_KEY = keyboard_and_mouse.VIRTUAL_KEY;
 const VK_CONTROL = keyboard_and_mouse.VK_CONTROL;
@@ -27,31 +28,29 @@ const VK_RSHIFT = keyboard_and_mouse.VK_RSHIFT;
 
 const PRESSED: u8 = 0b10000000;
 
-pub fn EventLoop(S: type) type {
-    return struct {
-        pub fn messageLoop(event_loop: *event.EventLoop(S)) !void {
-            var message: windows_and_messaging.MSG = undefined;
-            while (event_loop.isActive() and windows_and_messaging.GetMessageW(&message, null, 0, 0) == zig.TRUE) {
-                _ = windows_and_messaging.TranslateMessage(&message);
-                _ = windows_and_messaging.DispatchMessageW(&message);
-            }
+pub const EventLoop = struct {
+    pub fn messageLoop(event_loop: *event.EventLoop) !void {
+        var message: windows_and_messaging.MSG = undefined;
+        while (event_loop.isActive() and windows_and_messaging.GetMessageW(&message, null, 0, 0) == zig.TRUE) {
+            _ = windows_and_messaging.TranslateMessage(&message);
+            _ = windows_and_messaging.DispatchMessageW(&message);
         }
+    }
 
-        pub fn pollMessages() !bool {
-            var message: windows_and_messaging.MSG = undefined;
-            if (windows_and_messaging.PeekMessageW(&message, null, 0, 0, windows_and_messaging.PM_REMOVE) != 0) {
-                _ = windows_and_messaging.TranslateMessage(&message);
-                _ = windows_and_messaging.DispatchMessageW(&message);
-                return true;
-            }
-            return false;
+    pub fn pollMessages() !bool {
+        var message: windows_and_messaging.MSG = undefined;
+        if (windows_and_messaging.PeekMessageW(&message, null, 0, 0, windows_and_messaging.PM_REMOVE) != 0) {
+            _ = windows_and_messaging.TranslateMessage(&message);
+            _ = windows_and_messaging.DispatchMessageW(&message);
+            return true;
         }
+        return false;
+    }
 
-        pub fn setup(id: [:0]const u16) !void {
-            if (util.SetCurrentProcessExplicitAppUserModelID(id.ptr) != util.S_OK) return error.UnknownError;
-        }
-    };
-}
+    pub fn setup(id: [:0]const u16) !void {
+        if (util.SetCurrentProcessExplicitAppUserModelID(id.ptr) != util.S_OK) return error.UnknownError;
+    }
+};
 
 fn getKeyboardState(keyboard: *[256]u8) void {
     _ = keyboard_and_mouse.GetKeyboardState(keyboard);
@@ -81,8 +80,29 @@ fn getModifiers(keyboard: *const [256]u8) Modifiers {
     return modifiers;
 }
 
-pub fn parseEvent(win: *Window, message: u32, wparam: usize, lparam: isize) ?Event {
+const ImmersiveColorSet: [:0]const u8 = "ImmersiveColorSet\x00";
+pub fn parseEvent(win: *Window, hwnd: foundation.HWND, message: u32, wparam: usize, lparam: isize) ?Event {
+    _ = hwnd;
     switch (message) {
+        windows_and_messaging.WM_SETTINGCHANGE => {
+            const name: [*:0]const u16 = @ptrFromInt(@as(usize, @bitCast(lparam)));
+
+            if (win.getTheme() == .system) {
+                const isImmersiveColorSet = for (0..18) |i| {
+                    if (@as(u8, @intCast(name[i])) != ImmersiveColorSet[i]) break false;
+                } else true;
+
+                if (isImmersiveColorSet) {
+                    if (util.isLightTheme()) |isLight| {
+                        if (isLight != win.getCurrentTheme().isLight()) {
+                            win.inner.setCurrentTheme(if (isLight) .light else .dark);
+                            return .{ .theme = if (win.getCurrentTheme() == .light) .light else .dark };
+                        }
+                    } else |_| {}
+                }
+            }
+            return null;
+        },
         // Request to close the window
         windows_and_messaging.WM_CLOSE, windows_and_messaging.WM_DESTROY => {
             return Event.close;
@@ -99,10 +119,10 @@ pub fn parseEvent(win: *Window, message: u32, wparam: usize, lparam: isize) ?Eve
             if (wmEvent == 0) {
                 const menu_info = win.inner.itemToMenu.getPtr(@intCast(wmId));
                 if (menu_info) |info| {
-                    return Event{.menu = .{
+                    return Event{ .menu = .{
                         .id = @intCast(wmId),
                         .item = info,
-                    }};
+                    } };
                 }
             }
         },

@@ -24,7 +24,7 @@ const csr = @import("cursor.zig");
 const IconType = @import("../icon.zig").IconType;
 const CursorType = @import("../cursor.zig").CursorType;
 const Win = @import("../window.zig");
-const EventHandler = @import("../event.zig").EventHandler;
+const EventLoop = @import("../event.zig").EventLoop;
 
 const HMENU = windows_and_messaging.HMENU;
 const WINAPI = std.os.windows.WINAPI;
@@ -73,7 +73,7 @@ pub const MenuContext = struct {
         try self.itemToMenu.put(self.allocator, self.count.*, .{
             .id = action.id,
             .menu = @ptrCast(self.current),
-            .payload = .{ .action = .{ .label = label }},
+            .payload = .{ .action = .{ .label = label } },
         });
         if (windows_and_messaging.AppendMenuA(self.current, windows_and_messaging.MF_STRING, self.count.*, label.ptr) == 0) {
             return error.AppendMenuAction;
@@ -87,13 +87,15 @@ pub const MenuContext = struct {
         try self.itemToMenu.put(self.allocator, self.count.*, .{
             .id = checkable.id,
             .menu = @ptrCast(self.current),
-            .payload = .{ .toggle = .{ .label = label }}
+            .payload = .{
+                .toggle = .{ .label = label },
+            },
         });
         if (windows_and_messaging.AppendMenuA(
             self.current,
             if (checkable.default) windows_and_messaging.MF_CHECKED else windows_and_messaging.MF_UNCHECKED,
             self.count.*,
-            label.ptr
+            label.ptr,
         ) == 0) {
             return error.AppendMenuToggle;
         }
@@ -115,17 +117,14 @@ pub const MenuContext = struct {
         try self.itemToMenu.put(self.allocator, self.count.*, .{
             .id = checkable.id,
             .menu = @ptrCast(self.current),
-            .payload = .{ .radio = .{
-                .group = .{ start, end },
-                .label = label,
-            }}
+            .payload = .{
+                .radio = .{
+                    .group = .{ start, end },
+                    .label = label,
+                },
+            },
         });
-        if (windows_and_messaging.AppendMenuA(
-            self.current,
-            if (checkable.default) windows_and_messaging.MF_CHECKED else windows_and_messaging.MF_UNCHECKED,
-            self.count.*,
-            label.ptr
-        ) == 0) {
+        if (windows_and_messaging.AppendMenuA(self.current, if (checkable.default) windows_and_messaging.MF_CHECKED else windows_and_messaging.MF_UNCHECKED, self.count.*, label.ptr) == 0) {
             return error.AppendMenuRadioItem;
         }
     }
@@ -146,7 +145,7 @@ pub const MenuContext = struct {
 
                     var inner = self.sub(innerMenu);
                     try inner.appendMenu(subMenu.items);
-                }
+                },
             }
         }
     }
@@ -156,6 +155,8 @@ title: [:0]const u16,
 class: [:0]const u16,
 icon: Icon,
 cursor: Cursor,
+theme: Win.Theme,
+current_theme: Win.Theme,
 
 handle: foundation.HWND,
 instance: ?foundation.HINSTANCE,
@@ -193,7 +194,7 @@ pub fn format(value: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, 
 pub fn init(
     allocator: std.mem.Allocator,
     options: Win.Options,
-    handler: *EventHandler,
+    event_loop: *EventLoop,
 ) !*@This() {
     const win = try allocator.create(@This());
     errdefer allocator.destroy(win);
@@ -295,16 +296,25 @@ pub fn init(
         null, // Parent
         null, // Menu
         instance,
-        @ptrCast(handler), // WM_CREATE lpParam
+        @ptrCast(event_loop), // WM_CREATE lpParam
     ) orelse return error.SystemCreateWindow;
 
     // Set dark title bar
     var value: foundation.BOOL = undefined;
+    var current_theme: Win.Theme = .dark;
     switch (options.theme) {
         .dark => value = zig.TRUE,
-        .light => value = zig.FALSE,
+        .light => {
+            value = zig.FALSE;
+            current_theme = .light;
+        },
         // TODO: Add helper method to check systems current color mode
-        .system => value = zig.TRUE,
+        .system => if (util.isLightTheme() catch false) {
+            current_theme = .light;
+            value = zig.FALSE;
+        } else {
+            value = zig.TRUE;
+        },
     }
 
     // TODO: Add method to toggle dark mode
@@ -320,6 +330,8 @@ pub fn init(
         .class = class,
         .icon = icon,
         .cursor = cursor,
+        .theme = options.theme,
+        .current_theme = current_theme,
         .handle = hwnd,
         .instance = instance,
     };
@@ -511,6 +523,42 @@ pub fn getHIcon(icon: Icon) ?windows_and_messaging.HICON {
     };
 }
 
+pub fn setTheme(self: *@This(), theme: Win.Theme) void {
+    if (theme == self.theme) return;
+    self.theme = theme;
+
+    self.setCurrentTheme(theme);
+}
+
+pub fn setCurrentTheme(self: *@This(), theme: Win.Theme) void {
+    if (theme == self.current_theme) return;
+    switch (theme) {
+        .light => {
+            self.current_theme = .light;
+            _ = dwm.DwmSetWindowAttribute(self.handle, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &zig.FALSE, @sizeOf(foundation.BOOL));
+        },
+        .dark => {
+            self.current_theme = .dark;
+            _ = dwm.DwmSetWindowAttribute(self.handle, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &zig.TRUE, @sizeOf(foundation.BOOL));
+        },
+        .system => if (util.isLightTheme() catch false) {
+            self.current_theme = .light;
+            _ = dwm.DwmSetWindowAttribute(self.handle, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &zig.FALSE, @sizeOf(foundation.BOOL));
+        } else {
+            self.current_theme = .dark;
+            _ = dwm.DwmSetWindowAttribute(self.handle, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &zig.TRUE, @sizeOf(foundation.BOOL));
+        }
+    }
+}
+
+pub fn getCurrentTheme(self: *@This()) Win.Theme {
+    return self.current_theme;
+}
+
+pub fn getTheme(self: *@This()) Win.Theme {
+    return self.theme;
+}
+
 pub fn setMenu(self: *@This(), allocator: std.mem.Allocator, new_menu: ?[]const MenuItem) !void {
     for (self.menus.items) |m| _ = windows_and_messaging.DestroyMenu(m);
     for (self.itemToMenu.values()) |v| switch (v.payload) {
@@ -528,7 +576,7 @@ pub fn setMenu(self: *@This(), allocator: std.mem.Allocator, new_menu: ?[]const 
             try self.menus.append(allocator, rootMenu.?);
 
             var count: usize = 0;
-            var context = MenuContext {
+            var context = MenuContext{
                 .allocator = allocator,
                 .current = rootMenu.?,
                 .menus = &self.menus,
@@ -547,6 +595,7 @@ pub fn setMenu(self: *@This(), allocator: std.mem.Allocator, new_menu: ?[]const 
     _ = windows_and_messaging.DrawMenuBar(self.handle);
 }
 
+const ImmersiveColorSet: [:0]const u8 = "ImmersiveColorSet\x00";
 fn wndProc(
     hwnd: foundation.HWND,
     uMsg: u32,
@@ -562,7 +611,7 @@ fn wndProc(
         if (create_struct.lpCreateParams) |create_params| {
             // Cast from anyopaque to an expected EventLoop
             // this includes casting the pointer alignment
-            const event_loop: *EventHandler = @ptrCast(@alignCast(create_params));
+            const event_loop: *EventLoop = @ptrCast(@alignCast(create_params));
             // Cast pointer to isize for setting data
             const long_ptr: usize = @intFromPtr(event_loop);
             const ptr: isize = @intCast(long_ptr);
@@ -573,11 +622,11 @@ fn wndProc(
         const ptr = windows_and_messaging.GetWindowLongPtrW(hwnd, windows_and_messaging.GWLP_USERDATA);
         // Cast int to optional EventLoop pointer
         const lptr: usize = @intCast(ptr);
-        const handler: ?*EventHandler = @ptrFromInt(lptr);
+        const event_loop: ?*EventLoop = @ptrFromInt(lptr);
 
-        if (handler) |target| {
+        if (event_loop) |loop| {
             // TODO: Return failure
-            if (!target.handleEvent(hwnd, uMsg, wparam, lparam)) {
+            if (!loop.handleEvent(.{ hwnd, uMsg, wparam, lparam })) {
                 return windows_and_messaging.DefWindowProcW(hwnd, uMsg, wparam, lparam);
             }
         } else {
