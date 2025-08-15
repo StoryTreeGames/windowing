@@ -57,7 +57,7 @@ pub const Buttons = enum {
     };
 };
 
-fn Button(comptime buttons: ?Buttons) type {
+pub fn Button(comptime buttons: ?Buttons) type {
     if (buttons) |btns| {
         return switch (btns) {
             .abort_retry_ignore => ?Buttons.AbortRetryIgnore,

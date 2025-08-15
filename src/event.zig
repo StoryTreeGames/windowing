@@ -27,9 +27,34 @@ pub const KeyEvent = struct {
     /// Key representation
     key: Key,
 
-    pub fn matches(self: *const KeyEvent, key: Key, modifiers: Modifiers) bool {
-        return self.modifiers.eq(modifiers) and self.key == key;
+    pub fn matches(self: *const KeyEvent, key: anytype, modifiers: Mods) bool {
+        const KEY = @TypeOf(key);
+
+        const key_match = switch (KEY) {
+            u8, u21, u32, comptime_int => self.key == .char and @as(u21, @intCast(key)) == @as(u21, @intCast(std.mem.readInt(u32, self.key.char, .big))),
+            input.VirtualKey, @Type(.enum_literal) => self.key == .virtual and self.key.virtual == key,
+            else => @compileError("unsupported key type '" ++ @typeName(@TypeOf(key)) ++ "': expected u8, u21, u32, or virtual key"),
+        };
+
+        var modifiers_match = true;
+        if (modifiers.ctrl != null and modifiers.ctrl != self.modifiers.ctrl) {
+            modifiers_match = false;
+        }
+        if (modifiers.alt != null and modifiers.alt != self.modifiers.alt) {
+            modifiers_match = false;
+        }
+        if (modifiers.shift != null and modifiers.shift != self.modifiers.shift) {
+            modifiers_match = false;
+        }
+
+        return key_match and modifiers_match;
     }
+
+    pub const Mods = struct {
+        ctrl: ?bool = null,
+        alt: ?bool = null,
+        shift: ?bool = null,
+    };
 };
 
 pub const ButtonState = enum {
@@ -106,7 +131,7 @@ pub const Event = union(enum) {
     mouse_scroll: ScrollEvent,
     /// Menu item event
     menu: MenuEvent,
-    theme: enum { light, dark }
+    theme: enum { light, dark },
 };
 
 pub const EventLoop = struct {

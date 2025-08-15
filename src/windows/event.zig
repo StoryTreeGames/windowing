@@ -104,7 +104,7 @@ pub fn parseEvent(win: *Window, hwnd: foundation.HWND, message: u32, wparam: usi
             return null;
         },
         // Request to close the window
-        windows_and_messaging.WM_CLOSE, windows_and_messaging.WM_DESTROY => {
+        windows_and_messaging.WM_CLOSE => {
             return Event.close;
         },
         windows_and_messaging.WM_SETCURSOR => {

@@ -1,3 +1,5 @@
+// TODO: Do owner drawn menu bar so that the background and text colors can match the caption/title bar
+
 const std = @import("std");
 
 const Rect = @import("../root.zig").Rect;
@@ -18,10 +20,12 @@ const zig = win32.zig;
 const dwm = win32.graphics.dwm;
 
 const util = @import("util.zig");
-const ico = @import("icon.zig");
-const csr = @import("cursor.zig");
+const cursorToResource = @import("cursor.zig").cursorToResource;
+const iconToResource = @import("icon.zig").iconToResource;
 
-const IconType = @import("../icon.zig").IconType;
+const ico = @import("../icon.zig");
+const csr = @import("../cursor.zig");
+const IconType = ico.IconType;
 const CursorType = @import("../cursor.zig").CursorType;
 const Win = @import("../window.zig");
 const EventLoop = @import("../event.zig").EventLoop;
@@ -204,52 +208,6 @@ pub fn init(
     const class = try util.createUIDClass(allocator);
     errdefer allocator.free(class);
 
-    const icon: Icon = switch (options.icon) {
-        .icon => |i| .{ .icon = i },
-        .custom => |custom| custom: {
-            const temp = std.fs.cwd().realpathAlloc(allocator, custom) catch |err| switch (err) {
-                error.FileNotFound => return error.FileNotFound,
-                error.OutOfMemory => return error.OutOfMemory,
-                else => return error.InvalidUtf8,
-            };
-            defer allocator.free(temp);
-
-            // Move the cursor path into a null terminated utf16 string
-            break :custom .{
-                .custom = try util.utf8ToUtf16Alloc(allocator, temp),
-            };
-        },
-    };
-    errdefer switch (icon) {
-        .custom => |custom| allocator.free(custom),
-        else => {},
-    };
-
-    const cursor: Cursor = switch (options.cursor) {
-        .icon => |i| .{ .icon = i },
-        .custom => |custom| custom: {
-            const temp = std.fs.cwd().realpathAlloc(allocator, custom.path) catch |err| switch (err) {
-                error.FileNotFound => return error.FileNotFound,
-                error.OutOfMemory => return error.OutOfMemory,
-                else => return error.InvalidUtf8,
-            };
-            defer allocator.free(temp);
-
-            // Move the cursor path into a null terminated utf16 string
-            break :custom .{
-                .custom = .{
-                    .path = try util.utf8ToUtf16Alloc(allocator, temp),
-                    .width = custom.width,
-                    .height = custom.height,
-                },
-            };
-        },
-    };
-    errdefer switch (cursor) {
-        .custom => |custom| allocator.free(custom.path),
-        else => {},
-    };
-
     const instance = library_loader.GetModuleHandleW(null);
     const wnd_class = windows_and_messaging.WNDCLASSW{
         .lpszClassName = class.ptr,
@@ -258,14 +216,15 @@ pub fn init(
         .cbClsExtra = 0,
         .cbWndExtra = 0,
 
-        .hIcon = getHIcon(icon),
-        .hCursor = getHCursor(cursor),
+        .hIcon = null,
+        .hCursor = null,
         .hbrBackground = gdi.GetStockObject(gdi.WHITE_BRUSH),
         .lpszMenuName = null,
 
         .hInstance = instance,
         .lpfnWndProc = wndProc, // wndProc,
     };
+
     const result = windows_and_messaging.RegisterClassW(&wnd_class);
 
     if (result == 0) {
@@ -308,7 +267,6 @@ pub fn init(
             value = zig.FALSE;
             current_theme = .light;
         },
-        // TODO: Add helper method to check systems current color mode
         .system => if (util.isLightTheme() catch false) {
             current_theme = .light;
             value = zig.FALSE;
@@ -317,24 +275,22 @@ pub fn init(
         },
     }
 
-    // TODO: Add method to toggle dark mode
-    // TODO: Add listener for system color mode change if set to `Auto` to change the theme
-    // TODO: Make menu bar color match title bar color
-    //
-    //  All of these require winrt mappings
     _ = dwm.DwmSetWindowAttribute(hwnd, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &value, @sizeOf(foundation.BOOL));
     _ = windows_and_messaging.ShowWindow(hwnd, windows_and_messaging.SW_SHOWDEFAULT);
 
     win.* = .{
         .title = title,
         .class = class,
-        .icon = icon,
-        .cursor = cursor,
+        .icon = .{ .icon = .default },
+        .cursor = .{ .icon = .default },
         .theme = options.theme,
         .current_theme = current_theme,
         .handle = hwnd,
         .instance = instance,
     };
+
+    try win.setCursor(allocator, options.cursor);
+    try win.setIcon(allocator, options.icon);
 
     return win;
 }
@@ -382,14 +338,14 @@ pub fn getRect(self: *const @This()) Rect(u32) {
 }
 
 /// Set window title
-pub fn setTitle(self: *const @This(), allocator: std.mem.Allocator, title: []const u8) !void {
+pub fn setTitle(self: *@This(), allocator: std.mem.Allocator, title: []const u8) !void {
     allocator.free(self.title);
     self.title = try util.utf8ToUtf16Alloc(allocator, title);
     _ = windows_and_messaging.SetWindowTextW(self.handle, self.title);
 }
 
 /// Set window icon
-pub fn setIcon(self: *const @This(), allocator: std.mem.Allocator, new_icon: Icon) !void {
+pub fn setIcon(self: *@This(), allocator: std.mem.Allocator, new_icon: ico.Icon) !void {
     // Free old icon memory
     switch (self.icon) {
         .custom => |custom| allocator.free(custom),
@@ -404,7 +360,7 @@ pub fn setIcon(self: *const @This(), allocator: std.mem.Allocator, new_icon: Ico
         },
     }
 
-    const hIcon: usize = @intFromPtr(self.getHIcon());
+    const hIcon: usize = @intFromPtr(getHIcon(self.icon));
 
     // Send message to window to now render new icon
     _ = windows_and_messaging.SendMessageW(
@@ -422,7 +378,7 @@ pub fn setIcon(self: *const @This(), allocator: std.mem.Allocator, new_icon: Ico
 }
 
 /// Set window cursor
-pub fn setCursor(self: *const @This(), allocator: std.mem.Allocator, new_cursor: Cursor) !void {
+pub fn setCursor(self: *@This(), allocator: std.mem.Allocator, new_cursor: csr.Cursor) !void {
     // Free old cursor memory
     switch (self.cursor) {
         .custom => |c| allocator.free(c.path),
@@ -449,13 +405,13 @@ pub fn setCursor(self: *const @This(), allocator: std.mem.Allocator, new_cursor:
     if (currHandle) |hwnd| {
         if (hwnd == self.handle) {
             // Get HCURSOR pointer from icon
-            _ = windows_and_messaging.SetCursor(self.getHCursor());
+            _ = windows_and_messaging.SetCursor(getHCursor(self.cursor));
         }
     }
 }
 
 /// Set the cursors position relative to the window
-pub fn setCursorPos(self: *const @This(), x: i32, y: i32) void {
+pub fn setCursorPos(self: *@This(), x: i32, y: i32) void {
     var point = foundation.POINT{
         .x = x,
         .y = y,
@@ -465,62 +421,12 @@ pub fn setCursorPos(self: *const @This(), x: i32, y: i32) void {
 }
 
 /// Set the mouse to be captured by the window, or release it from the window
-pub fn setCapture(self: *const @This(), state: bool) void {
+pub fn setCapture(self: *@This(), state: bool) void {
     if (state) {
         _ = keyboard_and_mouse.SetCapture(self.handle);
     } else {
         _ = keyboard_and_mouse.ReleaseCapture();
     }
-}
-
-fn show(hwnd: ?foundation.HWND, state: Win.Show) void {
-    if (hwnd) |h| {
-        _ = windows_and_messaging.ShowWindow(h, switch (state) {
-            .maximize => windows_and_messaging.SW_SHOWMAXIMIZED,
-            .minimize => windows_and_messaging.SW_SHOWMINIMIZED,
-            .restore => windows_and_messaging.SW_RESTORE,
-            else => return,
-        });
-        _ = gdi.UpdateWindow(h);
-    }
-}
-
-pub fn getHCursor(cursor: Cursor) ?windows_and_messaging.HCURSOR {
-    return switch (cursor) {
-        .icon => |i| windows_and_messaging.LoadCursorW(null, csr.cursorToResource(i)),
-        .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
-            null,
-            c.path.ptr,
-            windows_and_messaging.IMAGE_ICON,
-            c.width,
-            c.height,
-            windows_and_messaging.IMAGE_FLAGS{
-                .DEFAULTSIZE = 1,
-                .LOADFROMFILE = 1,
-                .SHARED = 1,
-                .LOADTRANSPARENT = 1,
-            },
-        )),
-    };
-}
-
-pub fn getHIcon(icon: Icon) ?windows_and_messaging.HICON {
-    return switch (icon) {
-        .icon => |i| windows_and_messaging.LoadIconW(null, ico.iconToResource(i)),
-        .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
-            null,
-            c.ptr,
-            windows_and_messaging.IMAGE_ICON,
-            0,
-            0,
-            windows_and_messaging.IMAGE_FLAGS{
-                .DEFAULTSIZE = 1,
-                .LOADFROMFILE = 1,
-                .SHARED = 1,
-                .LOADTRANSPARENT = 1,
-            },
-        )),
-    };
 }
 
 pub fn setTheme(self: *@This(), theme: Win.Theme) void {
@@ -640,4 +546,54 @@ fn wndProc(
     }
 
     return 0;
+}
+
+fn getHCursor(cursor: Cursor) ?windows_and_messaging.HCURSOR {
+    return switch (cursor) {
+        .icon => |i| windows_and_messaging.LoadCursorW(null, cursorToResource(i)),
+        .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
+            null,
+            c.path.ptr,
+            windows_and_messaging.IMAGE_ICON,
+            c.width,
+            c.height,
+            windows_and_messaging.IMAGE_FLAGS{
+                .DEFAULTSIZE = 1,
+                .LOADFROMFILE = 1,
+                .SHARED = 1,
+                .LOADTRANSPARENT = 1,
+            },
+        )),
+    };
+}
+
+fn getHIcon(icon: Icon) ?windows_and_messaging.HICON {
+    return switch (icon) {
+        .icon => |i| windows_and_messaging.LoadIconW(null, iconToResource(i)),
+        .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
+            null,
+            c.ptr,
+            windows_and_messaging.IMAGE_ICON,
+            0,
+            0,
+            windows_and_messaging.IMAGE_FLAGS{
+                .DEFAULTSIZE = 1,
+                .LOADFROMFILE = 1,
+                .SHARED = 1,
+                .LOADTRANSPARENT = 1,
+            },
+        )),
+    };
+}
+
+fn show(hwnd: ?foundation.HWND, state: Win.Show) void {
+    if (hwnd) |h| {
+        _ = windows_and_messaging.ShowWindow(h, switch (state) {
+            .maximize => windows_and_messaging.SW_SHOWMAXIMIZED,
+            .minimize => windows_and_messaging.SW_SHOWMINIMIZED,
+            .restore => windows_and_messaging.SW_RESTORE,
+            else => return,
+        });
+        _ = gdi.UpdateWindow(h);
+    }
 }

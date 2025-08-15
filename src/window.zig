@@ -32,8 +32,8 @@ pub const Options = struct {
     y: ?u32 = null,
     width: ?u32 = null,
     height: ?u32 = null,
-    icon: Icon = .default,
-    cursor: Cursor = .default,
+    icon: Icon = .Default,
+    cursor: Cursor = .Default,
     resizable: bool = true,
     theme: Theme = .system,
     show: Show = .restore,
@@ -94,27 +94,27 @@ pub fn getCurrentTheme(self: *@This()) Theme {
 }
 
 /// Set window title
-pub fn setTitle(self: *const @This(), title: []const u8) !void {
+pub fn setTitle(self: *@This(), title: []const u8) !void {
     try self.inner.setTitle(self.arena.allocator(), title);
 }
 
 /// Set window icon
-pub fn setIcon(self: *const @This(), new_icon: Icon) !void {
+pub fn setIcon(self: *@This(), new_icon: Icon) !void {
     try self.inner.setIcon(self.arena.allocator(), new_icon);
 }
 
 /// Set window cursor
-pub fn setCursor(self: *const @This(), new_cursor: Cursor) !void {
+pub fn setCursor(self: *@This(), new_cursor: Cursor) !void {
     try self.inner.setCursor(self.arena.allocator(), new_cursor);
 }
 
 /// Set the cursors position relative to the window
-pub fn setCursorPos(self: *const @This(), x: u32, y: u32) void {
+pub fn setCursorPos(self: *@This(), x: u32, y: u32) void {
     self.inner.setCursorPos(@intCast(x), @intCast(y));
 }
 
 /// Set the mouse to be captured by the window, or release it from the window
-pub fn setCapture(self: *const @This(), state: bool) void {
+pub fn setCapture(self: *@This(), state: bool) void {
     self.inner.setCapture(state);
 }
 

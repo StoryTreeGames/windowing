@@ -9,10 +9,42 @@ pub const Cursor = union(enum) {
         height: i32 = 0,
     },
 
-    pub const default: @This() = .{ .icon = .default };
+    pub const Default: @This() = .{ .icon = .default };
+    pub const Pointer: @This() = .{ .icon = .pointer };
+    pub const Crosshair: @This() = .{ .icon = .crosshair };
+    pub const Text: @This() = .{ .icon = .text };
+    pub const VerticalText: @This() = .{ .icon = .vertical_text };
+    pub const NotAllowed: @This() = .{ .icon = .not_allowed };
+    pub const NoDrop: @This() = .{ .icon = .no_drop };
+    pub const Grab: @This() = .{ .icon = .grab };
+    pub const Grabbing: @This() = .{ .icon = .grabbing };
+    pub const AllScroll: @This() = .{ .icon = .all_scroll };
+    pub const Move: @This() = .{ .icon = .move };
+    pub const EResize: @This() = .{ .icon = .e_resize };
+    pub const WResize: @This() = .{ .icon = .w_resize };
+    pub const EWResize: @This() = .{ .icon = .ew_resize };
+    pub const ColResize: @This() = .{ .icon = .col_resize };
+    pub const NResize: @This() = .{ .icon = .n_resize };
+    pub const SResize: @This() = .{ .icon = .s_resize };
+    pub const NSResize: @This() = .{ .icon = .ns_resize };
+    pub const RowResize: @This() = .{ .icon = .row_resize };
+    pub const NEResize: @This() = .{ .icon = .ne_resize };
+    pub const SWResize: @This() = .{ .icon = .sw_resize };
+    pub const NESWResize: @This() = .{ .icon = .nesw_resize };
+    pub const NWResize: @This() = .{ .icon = .nw_resize };
+    pub const SEResize: @This() = .{ .icon = .se_resize };
+    pub const NWSEResize: @This() = .{ .icon = .nwse_resize };
+    pub const Wait: @This() = .{ .icon = .wait };
+    pub const Help: @This() = .{ .icon = .help };
+    pub const Progress: @This() = .{ .icon = .progress };
+    pub const ContextMenu: @This() = .{ .icon = .context_menu };
+    pub const Cell: @This() = .{ .icon = .cell };
+    pub const Alias: @This() = .{ .icon = .alias };
+    pub const Copy: @This() = .{ .icon = .copy };
+    pub const ZoomIn: @This() = .{ .icon = .zoom_in };
 };
 
-pub const CursorType = enum {
+pub const CursorType = enum(u8) {
     default,
     pointer,
     crosshair,
