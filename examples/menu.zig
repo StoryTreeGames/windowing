@@ -3,6 +3,8 @@ const std = @import("std");
 const core = @import("storytree-core");
 const event = core.event;
 
+const notif = core.notification;
+
 const Window = @import("storytree-core").Window;
 const EventLoop = event.EventLoop;
 const Event = event.Event;
@@ -70,6 +72,12 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+
+    _ = try notif.Notification.send(allocator, null, "storytree-core-example-notif", .{
+        .title = "Test Notification",
+        .body = "Test notification from storytree core",
+        .audio = .{ .sound = .custom("C:\\Users\\dorkd\\Repo\\StoryTree\\windowing\\examples\\assets\\lizard_notification.mp3") },
+    });
 
     var app = App{ .allocator = allocator };
     var event_loop = try EventLoop.init(
