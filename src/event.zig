@@ -138,15 +138,17 @@ pub const EventLoop = struct {
     arena: std.heap.ArenaAllocator,
     state: *anyopaque,
 
-    identifier: if (builtin.os.tag == .windows) [:0]const u16 else void,
-
     handler: *const fn (*EventLoop, *anyopaque, *Window, Event) anyerror!bool,
     windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
 
-    pub fn init(allocator: std.mem.Allocator, identifier: []const u8, State: type, state: *State) !*@This() {
+    pub fn init(allocator: std.mem.Allocator, state: anytype) !*@This() {
+        const State: type = switch (@typeInfo(@TypeOf(state))) {
+            .pointer => |pointer| pointer.child,
+            else => @TypeOf(state),
+        };
+
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
-
         const allo = arena.allocator();
 
         const Handler = struct {
@@ -154,45 +156,15 @@ pub const EventLoop = struct {
                 const s: *State = @ptrCast(@alignCast(data));
                 if (@hasDecl(State, "handleEvent")) {
                     const func = @field(State, "handleEvent");
-                    const F = @TypeOf(func);
-                    const params = @typeInfo(F).@"fn".params;
-                    const rtrn = @typeInfo(F).@"fn".return_type.?;
-
-                    var args: std.meta.ArgsTuple(F) = undefined;
-                    inline for (params, 0..) |param, i| {
-                        args[i] = switch (param.type.?) {
-                            *Window, *const Window => win,
-                            Event => event,
-                            *State, *const State => s,
-                            *EventLoop, *const EventLoop => event_loop,
-                            else => @compileError("invalid event loop handler argument type: " ++ @typeName(State)),
-                        };
-                    }
-
-                    if (@typeInfo(rtrn) == .error_union) {
-                        return try @call(.auto, func, args);
-                    } else {
-                        return @call(.auto, func, args);
-                    }
+                    return func(s, event_loop, win, event);
                 }
             }
         };
-
-        const id = switch (builtin.os.tag) {
-            .windows => try std.unicode.utf8ToUtf16LeAllocZ(allo, identifier),
-            else => {},
-        };
-
-        switch (builtin.os.tag) {
-            .windows => try @import("windows/event.zig").EventLoop.setup(id),
-            else => @compileError("platform not supported"),
-        }
 
         const el = try allo.create(@This());
         el.* = .{
             .arena = arena,
             .state = @ptrCast(@alignCast(state)),
-            .identifier = id,
             // Type erased event handler that propagates the os specific event back to the event_loop and state handler
             .handler = Handler.handleEvent,
         };
@@ -222,6 +194,17 @@ pub const EventLoop = struct {
         return el;
     }
 
+    pub fn setAppId(self: *const @This(), app_id: []const u8) !void {
+        switch (builtin.os.tag) {
+            .windows => {
+                const id = try std.unicode.utf8ToUtf16LeAllocZ(self.arena.allocator(), app_id);
+                defer self.arena.allocator().free(id);
+                try @import("windows/event.zig").setAppId(id);
+            },
+            else => @compileError("platform not supported"),
+        }
+    }
+
     pub fn deinit(self: *@This()) void {
         self.arena.deinit();
     }
@@ -239,7 +222,6 @@ pub const EventLoop = struct {
 
     pub fn closeWindow(self: *@This(), id: usize) void {
         if (self.windows.get(id)) |win| {
-            win.inner.destroy();
             win.deinit();
             self.arena.allocator().destroy(win);
             _ = self.windows.swapRemove(id);

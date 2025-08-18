@@ -24,24 +24,10 @@ pub const App = struct {
         self.renderer.release();
     }
 
-    pub fn setup(self: *@This(), event_loop: *EventLoop) !void {
-        const win = try event_loop.createWindow(.{
-            .title = "wgpu-native-zig windows example",
-            .width = 640,
-            .height = 480,
-            .resizable = true,
-            .icon = .{ .custom = "examples\\assets\\icon.ico" },
-            // .cursor = .{ .icon = .pointer },
-        });
-
-        self.renderer = try Renderer.create(win);
-    }
-
     pub fn handleEvent(self: *@This(), event_loop: *EventLoop, win: *Window, evt: Event) !bool {
         switch (evt) {
             .close => event_loop.closeWindow(win.id()),
             .resize => |size| self.renderer.resize(size.width, size.height),
-            .repaint => self.renderer.render() catch {},
             else => return false,
         }
         return true;
@@ -54,11 +40,28 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    std.log.info("----- Event Loop -----", .{});
+    std.log.info("Creating App", .{});
     var app = App.init();
     defer app.deinit();
 
-    var event_loop = try EventLoop.init(allocator, "storytree.core.example.menu", App, &app);
+    std.log.info("Creating EventLoop", .{});
+    var event_loop = try EventLoop.init(allocator, &app);
     defer event_loop.deinit();
+
+    std.log.info("----- Window -----", .{});
+    std.log.info("Creating Window", .{});
+    const win = try event_loop.createWindow(.{
+        .title = "wgpu-native-zig windows example",
+        .width = 640,
+        .height = 480,
+        .resizable = true,
+        .icon = .{ .custom = "examples\\assets\\icon.ico" },
+        // .cursor = .{ .icon = .pointer },
+    });
+
+    std.log.info("----- Renderer -----", .{});
+    app.renderer = try Renderer.create(win);
 
     while (event_loop.isActive()) {
         if (!try event_loop.poll()) {

@@ -129,7 +129,7 @@ pub fn main() !void {
 
     var app = App{ .allocator = allocator };
 
-    var event_loop = try EventLoop.init(allocator, "storytree.core.example.dev", App, &app);
+    var event_loop = try EventLoop.init(allocator, &app);
     defer event_loop.deinit();
 
     // Custom debug output of window

@@ -1,6 +1,7 @@
 const win32 = @import("win32");
 const wgpu = @import("wgpu");
 const core = @import("storytree-core");
+const log = @import("std").log;
 
 const Renderer = @This();
 
@@ -16,6 +17,7 @@ pub fn create(window: *core.Window) !Renderer {
     const instance = wgpu.Instance.create(null) orelse return error.CouldNotCreateInstance;
     defer instance.release();
 
+    log.info("creating surface", .{});
     self.surface = instance.createSurface(&switch (@import("builtin").os.tag) {
         // On windows, the inner value of the window is the windows only data type that
         // contains the HINSTANCE and HWND types that are to be used here.
@@ -27,6 +29,7 @@ pub fn create(window: *core.Window) !Renderer {
         else => @compileError("platform not supported")
     }) orelse return error.CouldNotCreateSurface;
 
+    log.info("fetching adapter", .{});
     const adapter_request = instance.requestAdapterSync(&wgpu.RequestAdapterOptions{
         .compatible_surface = self.surface,
     });
@@ -36,6 +39,7 @@ pub fn create(window: *core.Window) !Renderer {
     };
     defer adapter.release();
 
+    log.info("fetching device", .{});
     const device_request = adapter.requestDeviceSync(&wgpu.DeviceDescriptor {
         .required_limits = null,
     });
@@ -44,11 +48,14 @@ pub fn create(window: *core.Window) !Renderer {
         else => return error.DeviceRequestFailed,
     };
 
+    log.info("create queue", .{});
     self.queue = self.device.getQueue() orelse return error.CouldNotGetQueue;
 
+    log.info("create capabilities", .{});
     var surface_capabilities: wgpu.SurfaceCapabilities = undefined;
     self.surface.getCapabilities(adapter, &surface_capabilities);
 
+    log.info("configuring surface", .{});
     const rect = window.getRect();
     self.surface_config = wgpu.SurfaceConfiguration {
         .width = rect.width,
@@ -61,6 +68,7 @@ pub fn create(window: *core.Window) !Renderer {
 
     // Render pipeline stuff
     // -------------------------------------------------------------------------
+    log.info("load shader module", .{});
     const shader_module = self.device.createShaderModule(&wgpu.shaderModuleWGSLDescriptor(.{
         .code = @embedFile("./shader.wgsl"),
     })) orelse return error.CouldNotCreateShader;
@@ -84,6 +92,7 @@ pub fn create(window: *core.Window) !Renderer {
         },
     };
 
+    log.info("create pipeline", .{});
     self.pipeline = self.device.createRenderPipeline(&wgpu.RenderPipelineDescriptor {
         .vertex = wgpu.VertexState {
             .module = shader_module,
@@ -99,10 +108,12 @@ pub fn create(window: *core.Window) !Renderer {
         },
     }) orelse return error.CouldNotCreateRenderPipeline;
 
+    log.info("finished renderer setup", .{});
     return self;
 }
 
 pub fn resize(self: *Renderer, width: u32, height: u32) void {
+    log.info("resize surface {d} x {d}", .{ width, height });
     self.surface_config.width = @max(width, 1);
     self.surface_config.height = @max(height, 1);
     self.surface.configure(&self.surface_config);

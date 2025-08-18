@@ -35,11 +35,11 @@ pub const Item = union(enum) {
     }
 
     pub fn toggle(identifier: []const u8, label: []const u8, default: bool) @This() {
-        return .{ .toggle_item = .{ .id = Id.init(identifier).value, .label = label, .default = default }};
+        return .{ .toggle_item = .{ .id = Id.init(identifier).value, .label = label, .default = default } };
     }
 
     pub fn submenu(label: [:0]const u8, items: []const Item) @This() {
-        return .{ .menu_item = .{ .label = label, .items = items }};
+        return .{ .menu_item = .{ .label = label, .items = items } };
     }
 
     pub fn group(radio_group: []const Checkable) @This() {
@@ -68,12 +68,8 @@ pub const Info = struct {
     menu: *anyopaque,
     payload: Payload,
 
-    pub const Payload = union(enum) {
-        action: struct { label: [:0]const u8 },
-        toggle: struct { label: [:0]const u8 },
-        radio: struct {
-            group: std.meta.Tuple(&.{ usize, usize }),
-            label: [:0]const u8,
-        }
-    };
+    pub const Payload = union(enum) { action: struct { label: [:0]const u8 }, toggle: struct { label: [:0]const u8 }, radio: struct {
+        group: std.meta.Tuple(&.{ usize, usize }),
+        label: [:0]const u8,
+    } };
 };

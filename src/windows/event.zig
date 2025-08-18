@@ -46,11 +46,11 @@ pub const EventLoop = struct {
         }
         return false;
     }
-
-    pub fn setup(id: [:0]const u16) !void {
-        if (util.SetCurrentProcessExplicitAppUserModelID(id.ptr) != util.S_OK) return error.UnknownError;
-    }
 };
+
+pub fn setAppId(id: [:0]const u16) !void {
+    if (util.SetCurrentProcessExplicitAppUserModelID(id.ptr) != util.S_OK) return error.UnknownError;
+}
 
 fn getKeyboardState(keyboard: *[256]u8) void {
     _ = keyboard_and_mouse.GetKeyboardState(keyboard);

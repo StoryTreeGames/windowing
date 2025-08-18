@@ -23,17 +23,9 @@ pub const Buttons = enum {
     yes_no,
     yes_no_cancel,
 
-    pub const AbortRetryIgnore = enum {
-        abort,
-        retry,
-        ignore
-    };
+    pub const AbortRetryIgnore = enum { abort, retry, ignore };
 
-    pub const CancelTryContinue = enum {
-        cancel,
-        @"try",
-        @"continue"
-    };
+    pub const CancelTryContinue = enum { cancel, @"try", @"continue" };
 
     pub const OkCancel = enum {
         ok,
@@ -57,20 +49,18 @@ pub const Buttons = enum {
     };
 };
 
-pub fn Button(comptime buttons: ?Buttons) type {
-    if (buttons) |btns| {
-        return switch (btns) {
-            .abort_retry_ignore => ?Buttons.AbortRetryIgnore,
-            .cancel_try_continue => ?Buttons.CancelTryContinue,
-            .help, .ok => bool,
-            .ok_cancel => ?Buttons.OkCancel,
-            .retry_cancel => ?Buttons.RetryCancel,
-            .yes_no => Buttons.YesNo,
-            .yes_no_cancel => ?Buttons.YesNoCancel,
-        };
-    }
-    return void;
-}
+pub const Button = enum {
+    abort,
+    retry,
+    ignore,
+    cancel,
+    @"try",
+    @"continue",
+    ok,
+    yes,
+    no,
+    help,
+};
 
 pub const MessageOptions = struct {
     title: ?[]const u8 = null,
@@ -78,7 +68,7 @@ pub const MessageOptions = struct {
     icon: ?Icon = null,
 };
 
-pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) Button(buttons) {
+pub fn message(buttons: ?Buttons, opts: MessageOptions) ?Button {
     switch (builtin.os.tag) {
         .windows => return windows_impl.message(buttons, opts),
         else => @compileError("platform not supported"),
@@ -114,26 +104,26 @@ fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: a
                 try dialog.setTitle(title.ptr);
             }
         },
-        else => @compileError("platform not supported")
+        else => @compileError("platform not supported"),
     }
 }
 
 fn addFileDialogFilters(allocator: std.mem.Allocator, dialog: anytype, types: []const std.meta.Tuple(&.{ []const u8, []const u8 })) !void {
-    switch(builtin.os.tag) {
+    switch (builtin.os.tag) {
         .windows => {
             const util = @import("windows/util.zig");
             const filters = try allocator.alloc(util.COMDLG_FILTERSPEC, types.len);
             for (types, 0..) |filter, i| {
                 const name = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[0]);
                 const spec = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[1]);
-                filters[i] = util.COMDLG_FILTERSPEC {
+                filters[i] = util.COMDLG_FILTERSPEC{
                     .pszName = name.ptr,
                     .pszSpec = spec.ptr,
                 };
             }
             try dialog.setFileTypes(filters);
         },
-        else => @compileError("platform not supported")
+        else => @compileError("platform not supported"),
     }
 }
 
@@ -151,7 +141,7 @@ pub const FileOpenDialogOptions = struct {
     /// element is the text description, i.e `"Text Files (*.txt)"` and the second element is the
     /// file extension filter pattern, with multiple entries separated by a semi-colon
     /// i.e `"*.txt;*.log"`
-    filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{ .{ "All types (*.*)", "*.*" } },
+    filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{.{ "All types (*.*)", "*.*" }},
     /// The filename to pre-populate in the dialog box
     file_name: []const u8 = "",
     /// Pick folders/directories instead of files
@@ -166,7 +156,7 @@ pub const FileOpenDialogOptions = struct {
 pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const []const u8 {
     switch (builtin.os.tag) {
         .windows => return try windows_impl.open(allocator, opts),
-        else => @compileError("platform not supported")
+        else => @compileError("platform not supported"),
     }
 }
 
@@ -184,7 +174,7 @@ pub const FileSaveDialogOptions = struct {
     /// element is the text description, i.e `"Text Files (*.txt)"` and the second element is the
     /// file extension filter pattern, with multiple entries separated by a semi-colon
     /// i.e `"*.txt;*.log"`
-    filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{ .{ "All types (*.*)", "*.*" } },
+    filters: []const std.meta.Tuple(&.{ []const u8, []const u8 }) = &.{.{ "All types (*.*)", "*.*" }},
     /// The filename to pre-populate in the dialog box
     file_name: []const u8 = "",
     /// Whether the user should be prompted when creating or overwritting a file
@@ -194,7 +184,7 @@ pub const FileSaveDialogOptions = struct {
 pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const u8 {
     switch (builtin.os.tag) {
         .windows => return try windows_impl.save(allocator, opts),
-        else => @compileError("platform not supported")
+        else => @compileError("platform not supported"),
     }
 }
 
@@ -207,7 +197,7 @@ pub const ColorOptions = struct {
 pub fn color(options: ColorOptions) !?Color {
     switch (builtin.os.tag) {
         .windows => return try windows_impl.color(options),
-        else => @compileError("platform not supported")
+        else => @compileError("platform not supported"),
     }
 }
 
@@ -223,6 +213,6 @@ pub const FontOptions = struct {
 pub fn font(allocator: std.mem.Allocator, options: FontOptions) !?Font {
     switch (builtin.os.tag) {
         .windows => return try windows_impl.font(allocator, options),
-        else => @compileError("platform not supported")
+        else => @compileError("platform not supported"),
     }
 }

@@ -54,7 +54,7 @@ fn addFileDialogFilters(allocator: std.mem.Allocator, dialog: anytype, types: []
     try dialog.setFileTypes(filters);
 }
 
-pub fn processResult(comptime buttons: ?Buttons, action: i32) Button(buttons) {
+pub fn processResult(comptime buttons: ?Buttons, action: i32) ?Button {
     switch (builtin.os.tag) {
         .windows => {
             const MESSAGEBOX_RESULT = @import("win32").ui.windows_and_messaging.MESSAGEBOX_RESULT;
@@ -63,43 +63,43 @@ pub fn processResult(comptime buttons: ?Buttons, action: i32) Button(buttons) {
             if (buttons) |btns| {
                 switch (btns) {
                     .abort_retry_ignore => switch (result) {
-                        .ABORT => return Buttons.AbortRetryIgnore.abort,
-                        .RETRY => return Buttons.AbortRetryIgnore.retry,
-                        .IGNORE => return Buttons.AbortRetryIgnore.retry,
+                        .ABORT => return Button.abort,
+                        .RETRY => return Button.retry,
+                        .IGNORE => return Button.retry,
                         else => return null,
                     },
                     .cancel_try_continue => switch (result) {
-                        .CANCEL => return Buttons.CancelTryContinue.cancel,
-                        .TRYAGAIN => return Buttons.CancelTryContinue.@"try",
-                        .CONTINUE => return Buttons.CancelTryContinue.@"continue",
+                        .CANCEL => return Button.cancel,
+                        .TRYAGAIN => return Button.@"try",
+                        .CONTINUE => return Button.@"continue",
                         else => return null,
                     },
                     .help => switch (result) {
-                        .OK => return true,
-                        else => return false,
+                        .OK => return .help,
+                        else => return null,
                     },
                     .ok => switch (result) {
-                        .OK => return true,
-                        else => return false,
+                        .OK => return .ok,
+                        else => return null,
                     },
                     .ok_cancel => switch (result) {
-                        .OK => return Buttons.OkCancel.ok,
-                        .CANCEL => return Buttons.OkCancel.cancel,
+                        .OK => return Button.ok,
+                        .CANCEL => return Button.cancel,
                         else => return null,
                     },
                     .retry_cancel => switch (result) {
-                        .RETRY => return Buttons.RetryCancel.retry,
-                        .CANCEL => return Buttons.RetryCancel.cancel,
+                        .RETRY => return Button.retry,
+                        .CANCEL => return Button.cancel,
                         else => return null,
                     },
                     .yes_no => switch (result) {
-                        .YES => return Buttons.YesNo.yes,
-                        else => return Buttons.YesNo.no,
+                        .YES => return Button.yes,
+                        else => return Button.no,
                     },
                     .yes_no_cancel => switch (result) {
-                        .YES => return Buttons.YesNoCancel.yes,
-                        .NO => return Buttons.YesNoCancel.no,
-                        .CANCEL => return Buttons.YesNoCancel.cancel,
+                        .YES => return Button.yes,
+                        .NO => return Button.no,
+                        .CANCEL => return Button.cancel,
                         else => return null,
                     },
                 }
@@ -110,9 +110,7 @@ pub fn processResult(comptime buttons: ?Buttons, action: i32) Button(buttons) {
     }
 }
 
-// TODO: Can this be converted into a generic dialog where custom elements can be added?
-// Additions would include progress bar, dropdown, etc.
-pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) Button(buttons) {
+pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) ?Button {
     const win32 = @import("win32");
     const wam = win32.ui.windows_and_messaging;
 

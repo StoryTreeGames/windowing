@@ -56,6 +56,7 @@ pub fn init(allocator: std.mem.Allocator, options: Options, event_loop: *EventLo
 }
 
 pub fn deinit(self: *@This()) void {
+    self.inner.destroy();
     self.arena.deinit();
 }
 

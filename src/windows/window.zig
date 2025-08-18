@@ -548,7 +548,7 @@ fn wndProc(
     return 0;
 }
 
-fn getHCursor(cursor: Cursor) ?windows_and_messaging.HCURSOR {
+pub fn getHCursor(cursor: Cursor) ?windows_and_messaging.HCURSOR {
     return switch (cursor) {
         .icon => |i| windows_and_messaging.LoadCursorW(null, cursorToResource(i)),
         .custom => |c| @ptrCast(windows_and_messaging.LoadImageW(
