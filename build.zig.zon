@@ -16,6 +16,10 @@
             .url = "git+https://github.com/bronter/wgpu_native_zig?ref=v5.0.0#2012f51c16d29824ea15cc4db6e46fc5bb44e868",
             .hash = "wgpu_native_zig-5.0.0-B9jeDOGZAgAkyePsJjgwsgHgo0guYS7S9cQqDcZx9kXL",
         },
+        .wayland = .{
+            .url = "git+https://github.com/ifreund/zig-wayland#65b01fb69148013eea882c8222a82a1d96a6241b",
+            .hash = "wayland-0.4.0-dev-lQa1krLJAQBGO2aKqDcfxUOsW_e4PJZO_K_rxA20RztB",
+        },
     },
     .paths = .{
         "src",
