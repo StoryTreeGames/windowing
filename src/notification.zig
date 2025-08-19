@@ -218,21 +218,21 @@ pub const Update = struct {
     } = null,
 };
 
-const Inner = switch(@import("builtin").os.tag) {
+const Impl = switch(@import("builtin").os.tag) {
     .windows => @import("windows/notification.zig").Notification,
     else => @compileError("unsupported platform")
 };
 
 pub const Notification = struct {
-    inner: Inner,
+    impl: Impl,
 
     pub fn send(alloc: std.mem.Allocator, app_id: ?[]const u8, tag: []const u8, config: Config) !@This() {
         return .{
-            .inner = try Inner.send(alloc, app_id, tag, config),
+            .impl = try Impl.send(alloc, app_id, tag, config),
         };
     }
 
     pub fn update(self: *const @This(), alloc: std.mem.Allocator, config: Update) !void {
-        try self.inner.update(alloc, config);
+        try self.impl.update(alloc, config);
     }
 };

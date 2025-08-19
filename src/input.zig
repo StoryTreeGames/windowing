@@ -1,3 +1,8 @@
+const impl = switch(@import("builtin").os.tag) {
+    .windows => @import("windows/input.zig"),
+    else => @compileError("platform not supported"),
+};
+
 pub const Key = union(enum) {
     virtual: VirtualKey,
     char: [4]u8,
@@ -30,10 +35,22 @@ pub const VirtualKey = enum(u32) {
     @"return",
     /// shift key
     shift,
+    /// left shift key
+    left_shift,
+    /// right shift key
+    right_shift,
     /// ctrl key
     control,
+    /// left ctrl key
+    left_control,
+    /// right ctrl key
+    right_control,
     /// alt key
     alt,
+    /// left alt key
+    left_alt,
+    /// right alt key
+    right_alt,
     /// pause key
     pause,
     /// caps lock key
@@ -98,8 +115,10 @@ pub const VirtualKey = enum(u32) {
     delete,
     /// help key
     help,
-    /// windows key
-    super,
+    /// left windows key
+    left_super,
+    /// right windows key
+    right_super,
     /// applications key
     apps,
     /// computer sleep key
@@ -264,3 +283,14 @@ pub const MouseButton = enum(u32) {
     /// The second X button.
     x2 = 0x0040,
 };
+
+
+/// Get whether the key is down
+pub fn getKeyDown(key: anytype) bool {
+    return impl.getKeyState(key);
+}
+
+/// Get whether the key is up
+pub fn getKeyUp(key: anytype) bool {
+    return !impl.getKeyState(key);
+}

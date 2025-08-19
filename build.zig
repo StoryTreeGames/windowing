@@ -36,12 +36,8 @@ pub fn build(b: *std.Build) !void {
 
     const module = b.addModule(NAME, .{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
 
-    const zigwin32 = b.dependency("zigwin32", .{});
-    const uuid = b.dependency("uuid", .{});
-    const wgpu_native = b.dependency("wgpu_native_zig", .{});
-
-    var scanner: ?*Scanner = null;
     var wayland: ?*std.Build.Module = null;
+    var scanner: ?*Scanner = null;
     if (builtin.target.os.tag == .linux) {
         scanner = Scanner.create(b, .{});
         wayland = b.createModule(.{ .root_source_file = scanner.?.result });
@@ -50,6 +46,10 @@ pub fn build(b: *std.Build) !void {
         scanner.?.generate("wl_shm", 1);
         scanner.?.generate("xdg_wm_base", 1);
     }
+
+    const zigwin32 = b.dependency("zigwin32", .{});
+    const uuid = b.dependency("uuid", .{});
+    const wgpu_native = b.dependency("wgpu_native_zig", .{});
 
     module.addImport("uuid", uuid.module("uuid"));
     if (builtin.target.os.tag == .windows) {

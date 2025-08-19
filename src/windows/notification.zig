@@ -22,7 +22,7 @@ const Dictionary = struct {
     pub fn add(self: *@This(), name: []const u8, value: anytype) !void {
         const fmt = switch (@TypeOf(value)) {
             f32, comptime_float => "{d}",
-            else => "{s}"
+            else => "{s}",
         };
 
         const temp = try std.fmt.allocPrint(self.allocator, "$Dictionary.Add('{s}', '" ++ fmt ++ "');\n", .{ name, value });
@@ -110,7 +110,7 @@ const XmlImageAttrs = struct {
         /// Very top of toast spaning the full width
         hero,
         /// Replaces app logo in toast
-        app_logo_override
+        app_logo_override,
     } = null,
     /// Crop the image
     hint_crop: ?enum { circle } = null,
@@ -283,7 +283,7 @@ const Xml = struct {
                     try self.buffer.append('"');
                 }
                 try self.buffer.appendSlice("/>\n");
-            }
+            },
         }
     }
 
@@ -338,7 +338,7 @@ const Xml = struct {
                     try self.buffer.appendSlice(" useButtonStyle=\"false\"");
                 }
                 try self.buffer.appendSlice(">\n");
-            }
+            },
         }
     }
 
@@ -375,7 +375,7 @@ const Xml = struct {
                     try self.buffer.appendSlice(" loop=\"false\"");
                 }
                 try self.buffer.appendSlice("/>\n");
-            }
+            },
         }
     }
 
@@ -416,7 +416,7 @@ const MediaPlayer = struct {
             \\$MediaPlayer = [Windows.Media.Playback.MediaPlayer, Windows.Media, ContentType = WindowsRuntime]::New();
             \\
         );
-            
+
         return .{
             .allocator = allocator,
             .buffer = buffer,
@@ -496,7 +496,14 @@ const Script = struct {
     }
 
     pub fn execute(self: *@This()) !void {
-        const result = try process.Child.run(.{ .allocator = self.allocator, .argv = &.{ "powershell", "-c", self.buffer.items } });
+        const result = try process.Child.run(.{
+            .allocator = self.allocator,
+            .argv = &.{
+                "powershell",
+                "-c",
+                self.buffer.items,
+            },
+        });
         self.allocator.free(result.stdout);
         self.allocator.free(result.stderr);
     }
@@ -626,12 +633,13 @@ pub const Notification = struct {
         try notifier.show(dictionary, 1, toast_notification);
 
         try script.endCommand();
-
-        std.debug.print("{s}\n", .{script.buffer.items});
-
         try script.execute();
 
-        return .{ .tag = tag, .app_id = app_id orelse "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe", .config = config };
+        return .{
+            .tag = tag,
+            .app_id = app_id orelse "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
+            .config = config,
+        };
     }
 
     pub fn update(self: *const @This(), alloc: std.mem.Allocator, config: Update) !void {
@@ -678,7 +686,6 @@ pub const Notification = struct {
         try notifier.update(dictionary, 2, self.tag);
 
         try script.endCommand();
-
         try script.execute();
     }
 };

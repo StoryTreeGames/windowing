@@ -18,10 +18,11 @@ pub fn main() !void {
     if (true) {
         const result = try core.dialog.open(allocator, .{
             .filters = &.{
+                .{ "Herb (*.hrb)", "*.hrb" },
                 .{ "All types (*.*)", "*.*" },
                 .{ "Text (*.txt)", "*.txt" },
             },
-            .title = "save herb"
+            .title = "Open Herb Guid",
         });
 
         if (result) |paths| {
@@ -35,12 +36,13 @@ pub fn main() !void {
 
     if (true) {
         const result = try core.dialog.save(allocator, .{
-            .file_name = "sample.txt",
+            .file_name = "guide.hrb",
             .filters = &.{
+                .{ "Herb (*.hrb)", "*.hrb" },
                 .{ "All types (*.*)", "*.*" },
                 .{ "Text (*.txt)", "*.txt" },
             },
-            .title = "Save Herb",
+            .title = "Save Herb Guide",
         });
 
         if (result) |path| {

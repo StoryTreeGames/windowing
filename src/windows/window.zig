@@ -278,6 +278,11 @@ pub fn init(
     _ = dwm.DwmSetWindowAttribute(hwnd, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &value, @sizeOf(foundation.BOOL));
     _ = windows_and_messaging.ShowWindow(hwnd, windows_and_messaging.SW_SHOWDEFAULT);
 
+    // Attempt to bring window to the top if it is rendered below other windows
+    _ = windows_and_messaging.SetWindowPos(hwnd, null, 0, 0, 0, 0, .{ .NOMOVE = 1, .NOSIZE = 1 });
+    _ = windows_and_messaging.SetForegroundWindow(hwnd);
+    _ = windows_and_messaging.BringWindowToTop(hwnd);
+
     win.* = .{
         .title = title,
         .class = class,
@@ -420,6 +425,14 @@ pub fn setCursorPos(self: *@This(), x: i32, y: i32) void {
     _ = windows_and_messaging.SetCursorPos(point.x, point.y);
 }
 
+/// Get whether the mouse is captured by the current window
+pub fn getCapture(self: *@This()) bool {
+    if (keyboard_and_mouse.GetCapture(self.handle)) |target| {
+        return target == self.handle;
+    }
+    return false;
+}
+
 /// Set the mouse to be captured by the window, or release it from the window
 pub fn setCapture(self: *@This(), state: bool) void {
     if (state) {
@@ -427,6 +440,18 @@ pub fn setCapture(self: *@This(), state: bool) void {
     } else {
         _ = keyboard_and_mouse.ReleaseCapture();
     }
+}
+
+/// Get the current area that is used for rendering
+pub fn getClientRect(self: *@This()) Rect(u32) {
+    var area: util.RECT = .{ .left = 0, .right = 0, .top = 0, .bottom = 0 };
+    _ = windows_and_messaging.GetClientRect(self.handle, &area);
+    return .{
+        .x = @as(u32, @bitCast(area.left)),
+        .y = @as(u32, @bitCast(area.top)),
+        .width = @as(u32, @bitCast(area.right - area.left)),
+        .height = @as(u32, @bitCast(area.bottom - area.top)),
+    };
 }
 
 pub fn setTheme(self: *@This(), theme: Win.Theme) void {
@@ -453,7 +478,7 @@ pub fn setCurrentTheme(self: *@This(), theme: Win.Theme) void {
         } else {
             self.current_theme = .dark;
             _ = dwm.DwmSetWindowAttribute(self.handle, dwm.DWMWA_USE_IMMERSIVE_DARK_MODE, &zig.TRUE, @sizeOf(foundation.BOOL));
-        }
+        },
     }
 }
 

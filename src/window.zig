@@ -6,7 +6,7 @@ const Cursor = @import("cursor.zig").Cursor;
 const EventLoop = @import("event.zig").EventLoop;
 const MenuItem = @import("menu.zig").Item;
 
-pub const Inner = switch (@import("builtin").os.tag) {
+pub const Impl = switch (@import("builtin").os.tag) {
     .windows => @import("windows/window.zig"),
     else => @compileError("platform not supported")
 };
@@ -41,7 +41,7 @@ pub const Options = struct {
 
 arena: std.heap.ArenaAllocator,
 
-inner: *Inner,
+impl: *Impl,
 alive: bool,
 
 pub fn init(allocator: std.mem.Allocator, options: Options, event_loop: *EventLoop) !@This() {
@@ -49,82 +49,88 @@ pub fn init(allocator: std.mem.Allocator, options: Options, event_loop: *EventLo
     errdefer arena.deinit();
 
     return .{
-        .inner = try Inner.init(arena.allocator(), options, event_loop),
+        .impl = try Impl.init(arena.allocator(), options, event_loop),
         .alive = true,
         .arena = arena,
     };
 }
 
 pub fn deinit(self: *@This()) void {
-    self.inner.destroy();
+    self.impl.destroy();
     self.arena.deinit();
 }
 
 pub fn id(self: *const @This()) usize {
-    return self.inner.id();
+    return self.impl.id();
 }
 
 /// Minimize the window
 pub fn minimize(self: *const @This()) void {
-    self.inner.minimize();
+    self.impl.minimize();
 }
 
 /// Maximize the window
 pub fn maximize(self: *const @This()) void {
-    self.inner.maximize();
+    self.impl.maximize();
 }
 
 /// Restore the window to its default windowed state
 pub fn restore(self: *const @This()) void {
-    self.inner.restore();
-}
-
-/// Get the windows current rect (bounding box)
-pub fn getRect(self: *const @This()) Rect(u32) {
-    return self.inner.getRect();
+    self.impl.restore();
 }
 
 /// Get the windows configured theme
 pub fn getTheme(self: *@This()) Theme {
-    return self.inner.getTheme();
+    return self.impl.getTheme();
 }
 
 /// Get the windows current theme
 pub fn getCurrentTheme(self: *@This()) Theme {
-    return self.inner.getCurrentTheme();
+    return self.impl.getCurrentTheme();
 }
 
 /// Set window title
 pub fn setTitle(self: *@This(), title: []const u8) !void {
-    try self.inner.setTitle(self.arena.allocator(), title);
+    try self.impl.setTitle(self.arena.allocator(), title);
 }
 
 /// Set window icon
 pub fn setIcon(self: *@This(), new_icon: Icon) !void {
-    try self.inner.setIcon(self.arena.allocator(), new_icon);
+    try self.impl.setIcon(self.arena.allocator(), new_icon);
 }
 
 /// Set window cursor
 pub fn setCursor(self: *@This(), new_cursor: Cursor) !void {
-    try self.inner.setCursor(self.arena.allocator(), new_cursor);
+    try self.impl.setCursor(self.arena.allocator(), new_cursor);
 }
 
 /// Set the cursors position relative to the window
 pub fn setCursorPos(self: *@This(), x: u32, y: u32) void {
-    self.inner.setCursorPos(@intCast(x), @intCast(y));
+    self.impl.setCursorPos(@intCast(x), @intCast(y));
+}
+
+/// Get whether the mouse is captured by the current window
+pub fn getCapture(self: *@This()) bool {
+    self.impl.getCapture();
+}
+
+
+/// Get the current area that is used for rendering
+pub fn getClientRect(self: *@This()) Rect(u32) {
+    return self.impl.getClientRect();
 }
 
 /// Set the mouse to be captured by the window, or release it from the window
 pub fn setCapture(self: *@This(), state: bool) void {
-    self.inner.setCapture(state);
+    self.impl.setCapture(state);
 }
 
 /// Set or replace the window's menu bar
 pub fn setMenu(self: *@This(), menu: ?[]const MenuItem) !void {
-    try self.inner.setMenu(self.arena.allocator(), menu);
+    try self.impl.setMenu(self.arena.allocator(), menu);
 }
 
 /// Set the window's configured theme
 pub fn setTheme(self: *@This(), theme: Theme) void {
-    self.inner.setTheme(theme);
+    self.impl.setTheme(theme);
 }

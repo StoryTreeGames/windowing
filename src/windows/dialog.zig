@@ -16,7 +16,20 @@ const Buttons = d.Buttons;
 const MessageOptions = d.MessageOptions;
 const Button = d.Button;
 
-fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: anytype) !void {
+pub const AllocatedConfiguration = struct {
+    default_folder: ?*anyopaque = null,
+
+    pub fn deinit(self: *const @This()) void {
+        if (self.default_folder) |default_folder| {
+            const shell_item: *util.IShellItem = @ptrCast(@alignCast(default_folder));
+            _ = shell_item.release();
+        }
+    }
+};
+
+fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: anytype) !AllocatedConfiguration {
+    var config: AllocatedConfiguration = .{};
+
     if (options.folder.len > 0) {
         const path = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.folder);
         var default_folder: *anyopaque = undefined;
@@ -24,6 +37,8 @@ fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: a
         const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.UUID, &default_folder);
         if (result != util.S_OK) return error.Win32Error;
         try dialog.setFolder(@ptrCast(@alignCast(default_folder)));
+
+        config.default_folder = default_folder;
     }
 
     if (options.file_name.len > 0) {
@@ -39,22 +54,29 @@ fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: a
         const title = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.title);
         try dialog.setTitle(title.ptr);
     }
+
+    return config;
 }
 
-fn addFileDialogFilters(allocator: std.mem.Allocator, dialog: anytype, types: []const std.meta.Tuple(&.{ []const u8, []const u8 })) !void {
+fn addFileDialogFilters(
+    allocator: std.mem.Allocator,
+    dialog: anytype,
+    types: []const std.meta.Tuple(&.{ []const u8, []const u8 }),
+) !void {
     const filters = try allocator.alloc(util.COMDLG_FILTERSPEC, types.len);
     for (types, 0..) |filter, i| {
         const name = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[0]);
         const spec = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[1]);
-        filters[i] = util.COMDLG_FILTERSPEC {
-            .pszName = name.ptr,
-            .pszSpec = spec.ptr,
+
+        filters[i] = util.COMDLG_FILTERSPEC{
+            .pszName = name,
+            .pszSpec = spec,
         };
     }
     try dialog.setFileTypes(filters);
 }
 
-pub fn processResult(comptime buttons: ?Buttons, action: i32) ?Button {
+pub fn processResult(buttons: ?Buttons, action: i32) ?Button {
     switch (builtin.os.tag) {
         .windows => {
             const MESSAGEBOX_RESULT = @import("win32").ui.windows_and_messaging.MESSAGEBOX_RESULT;
@@ -104,13 +126,13 @@ pub fn processResult(comptime buttons: ?Buttons, action: i32) ?Button {
                     },
                 }
             }
-            return {};
+            return null;
         },
-        else => @compileError("platform not supported")
+        else => @compileError("platform not supported"),
     }
 }
 
-pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) ?Button {
+pub fn message(buttons: ?Buttons, opts: MessageOptions) ?Button {
     const win32 = @import("win32");
     const wam = win32.ui.windows_and_messaging;
 
@@ -123,23 +145,16 @@ pub fn message(comptime buttons: ?Buttons, opts: MessageOptions) ?Button {
         .retry_cancel => wam.MB_RETRYCANCEL, // AD
         .yes_no => wam.MB_YESNO,
         .yes_no_cancel => wam.MB_YESNOCANCEL, // AD
-    }
-    else wam.MESSAGEBOX_STYLE {});
+    } else wam.MESSAGEBOX_STYLE{});
 
     const icon_style: u32 = @bitCast(if (opts.icon) |ico| switch (ico) {
         .warning => wam.MB_ICONWARNING,
         .information => wam.MB_ICONINFORMATION,
         .question => wam.MB_ICONQUESTION,
         .@"error" => wam.MB_ICONERROR,
-    }
-    else wam.MESSAGEBOX_STYLE {});
+    } else wam.MESSAGEBOX_STYLE{});
 
-    const result = wam.MessageBoxA(
-        null,
-        if (opts.message) |m| @ptrCast(m.ptr) else null,
-        if (opts.title) |t| @ptrCast(t.ptr) else null,
-        @as(wam.MESSAGEBOX_STYLE, @bitCast(button_style | icon_style))
-    );
+    const result = wam.MessageBoxA(null, if (opts.message) |m| @ptrCast(m.ptr) else null, if (opts.title) |t| @ptrCast(t.ptr) else null, @as(wam.MESSAGEBOX_STYLE, @bitCast(button_style | icon_style)));
 
     return processResult(buttons, @intFromEnum(result));
 }
@@ -149,7 +164,6 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
     defer arena.deinit();
     const allo = arena.allocator();
 
-
     if (util.CoInitializeEx(null, .{
         .APARTMENTTHREADED = 1,
         .DISABLE_OLE1DDE = 1,
@@ -157,17 +171,12 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
     defer util.CoUninitialize();
 
     var dialog: *anyopaque = undefined;
-    if (util.CoCreateInstance(
-        &util.CLSID_FileOpenDialog,
-        null,
-        util.CLSCTX_ALL,
-        &util.IFileOpenDialog.UUID,
-        &dialog
-    ) != util.S_OK) return error.CoCreateInstanceFailure;
+    if (util.CoCreateInstance(&util.CLSID_FileOpenDialog, null, util.CLSCTX_ALL, &util.IFileOpenDialog.UUID, &dialog) != util.S_OK) return error.CoCreateInstanceFailure;
 
     var file_open_dialog: *util.IFileOpenDialog = @ptrCast(@alignCast(dialog));
 
-    try configureFileDialog(allo, file_open_dialog, opts);
+    const config = try configureFileDialog(allo, file_open_dialog, opts);
+    defer config.deinit();
 
     var options = try file_open_dialog.getOptions();
     options.PICKFOLDERS = opts.directory;
@@ -180,14 +189,17 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
 
     file_open_dialog.show(null) catch |e| switch (e) {
         error.UserCancelled => return null,
-        else => return e
+        else => return e,
     };
 
-    var out = std.ArrayList([]const u8).init(allocator);
     var shell_items = try file_open_dialog.getResults();
-    for (0..try shell_items.getCount()) |i| {
+    const len = try shell_items.getCount();
+
+    var out = try allocator.alloc([]const u8, len);
+
+    for (0..len) |i| {
         const item = try shell_items.getItemAt(i);
-        defer _ = item.release() catch {};
+        defer _ = item.release();
 
         const attrs = try item.getAttributes(.{ .FILESYSTEM = true });
         if (!attrs.FILESYSTEM) {
@@ -197,10 +209,10 @@ pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const
         const name = try item.getDisplayName(.DESKTOPABSOLUTEPARSING);
         defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
         const n = try std.unicode.utf16LeToUtf8Alloc(allocator, std.mem.sliceTo(name, 0));
-        try out.append(n);
+        out[i] = n;
     }
 
-    return try out.toOwnedSlice();
+    return out;
 }
 
 pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const u8 {
@@ -215,17 +227,12 @@ pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const
     defer util.CoUninitialize();
 
     var dialog: *anyopaque = undefined;
-    if (util.CoCreateInstance(
-        &util.CLSID_FileSaveDialog,
-        null,
-        util.CLSCTX_ALL,
-        &util.IFileSaveDialog.UUID,
-        &dialog
-    ) != util.S_OK) return error.CoCreateInstanceFailure;
+    if (util.CoCreateInstance(&util.CLSID_FileSaveDialog, null, util.CLSCTX_ALL, &util.IFileSaveDialog.UUID, &dialog) != util.S_OK) return error.CoCreateInstanceFailure;
 
     var file_save_dialog: *util.IFileSaveDialog = @ptrCast(@alignCast(dialog));
 
-    try configureFileDialog(allo, file_save_dialog, opts);
+    const config = try configureFileDialog(allo, file_save_dialog, opts);
+    defer config.deinit();
 
     var options = try file_save_dialog.getOptions();
     options.CREATEPROMPT = opts.prompt_on_create;
@@ -233,11 +240,11 @@ pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const
 
     file_save_dialog.show(null) catch |e| switch (e) {
         error.UserCancelled => return null,
-        else => return e
+        else => return e,
     };
 
     const item = try file_save_dialog.getResult();
-    defer _ = item.release() catch {};
+    defer _ = item.release();
 
     const name = try item.getDisplayName(.DESKTOPABSOLUTEPARSING);
     defer util.CoTaskMemFree(@ptrCast(@constCast(name)));
@@ -245,7 +252,7 @@ pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const
 }
 
 pub fn color(options: ColorOptions) !?Color {
-    var custom_colors: [16]u32 = [_]u32{ 0x00FFFFFF } ** 16;
+    var custom_colors: [16]u32 = [_]u32{0x00FFFFFF} ** 16;
     if (options.custom) |custom| {
         for (custom, 0..) |c, i| {
             custom_colors[i] = @bitCast(c);

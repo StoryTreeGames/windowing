@@ -1,22 +1,66 @@
-# Zig Native Window Library (ZNWL)
+# StoryTree Core
 
 This project serves as a part of a larger project to create a game engine from scratch. However, I strive to keep this library abstracted from the game engine and more generic. The initial focus of features may be around getting a minimal product for the engine, but I plan to expand the library to be generic and easy to use for any purpose.
 
-I am fairly new to Zig and it has been a few years since I last programmed in C/C++. With that in mind this project also serves as a learning tool for Zig, system programming, and open source.
+Any tips, PRs, and overall help are more than welcome.
 
-I hope to keep all my projects as open source and community based as possible. Any tips, PRs, and overall help are more than welcome.
-
-> ⚠️ Warn: This repo is currently exploratory and the API is subject to change with every merge into the main branch. To help with the volatile nature, this project will be split into a develop and a main branch.
+> ⚠️ Warn: This repo is currently exploratory and the API is subject to change with every merge into the main branch
+> To help with the volatile nature, this project will be split into a develop and a main branch.
 
 ## Goal
 
-A native windowing library cross-compiling without any fuss or problems to Windows, Linux (X11 + Wayland), MacOS, iOS, and Android.
+A native windowing library cross-compiling without any fuss or problems to Windows, Linux (X11 + Wayland), MacOS, iOS, and Android. Supported platforms will include Windows, Linux (X11 + Wayland), MacOS; and will be expanded to Web, IOS, and Android in the future.
 
-The library is written in pure Zig with the only non zig portions being APIs to native system libraries. There is nothing wrong with using GLFW and other related libraries, I just want to try something new. This library will start off basic and naïve and grow to be smart, easy to use, and full of features.
+The library is written in as much pure Zig as possible to provide an easy to use API with minimal dependencies. There is nothing wrong with using GLFW and other related libraries, I just want to try to create something new. This library will start off basic and naïve and grow to be intuitive, easy to use, and full of platform specific opt in features.
 
-Hopefully this library will stay generic enough to be able to be used with most other libraries and projects like `Vulkan` and `ImGUI`.
+Hopefully this library will remain generic enough to be able to be used with most other libraries and projects like `Vulkan` and `ImGUI`.
 
-**References**
+## Requirements
+
+- **Linux**
+  - Packages: `wayland-protocols`, `libwayland-dev` (or a varant that provides wayland-scanner)
+
+## TODO
+
+- [ ] Windows
+  - [x] Queue the events and pop them when polling instead of having them instantly being sent to app handler
+  - [ ] Finish keyboard input to support dead keys
+  - [x] Query key
+  - [ ] Query Mouse
+  - [ ] Add gamepad, controller, joystick input
+  - [ ] Audio
+  - [ ] System Tray
+  - [ ] Owner Drawn menu bar for system theme colors?
+    - This can be difficult and error prone. Plain white background with black text should work for now.
+
+- [ ] Wayland
+  - [ ] Basic window creation
+  - [ ] Event listening and handling
+  - [ ] Query keys and input state
+  - [ ] Audio
+  - [ ] Notifications
+  - [ ] System Tray
+  - [ ] Title Bar + Menu
+
+- [ ] X11
+  - [ ] Basic window creation
+  - [ ] Event listening and handling
+  - [ ] Query keys and input state
+  - [ ] Audio
+  - [ ] Notifications
+  - [ ] System Tray
+  - [ ] Title Bar + Menu
+
+- [ ] MacOS
+  - [ ] Basic window creation
+  - [ ] Event listening and handling
+  - [ ] Query keys and input state
+  - [ ] Audio
+  - [ ] Notifications
+  - [ ] System Tray
+  - [ ] Title Bar + Menu
+
+## References
 
 - GLFW \(C\): https://www.glfw.org/docs/3.3/window_guide.html
 - Winit (Rust): https://github.com/rust-windowing/winit
@@ -26,9 +70,3 @@ Hopefully this library will stay generic enough to be able to be used with most 
   - Windows
     - Toast Notification in plain C: https://gist.github.com/valinet/3283c79ba35fc8f103c747c8adbb6b23
     - Win32 ToastNotificationManager: https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.toastnotificationmanager?view=winrt-26100
-
-
-## TODO
-
-- [ ] Fix keyboard input
-- [ ] Add gamepad, controller, joystick input

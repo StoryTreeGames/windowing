@@ -1,6 +1,7 @@
 const wgpu = @import("wgpu");
 const core = @import("storytree-core");
-const log = @import("std").log;
+
+const log = @import("std").log.scoped(.wgpu);
 
 const Renderer = @This();
 
@@ -22,8 +23,8 @@ pub fn create(window: *core.Window) !Renderer {
         // contains the HINSTANCE and HWND types that are to be used here.
         .windows => wgpu.surfaceDescriptorFromWindowsHWND(.{
             .label = "HWND_surface",
-            .hinstance = window.inner.instance.?,
-            .hwnd = window.inner.handle,
+            .hinstance = window.impl.instance.?,
+            .hwnd = window.impl.handle,
         }),
         else => @compileError("platform not supported")
     }) orelse return error.CouldNotCreateSurface;
@@ -55,7 +56,7 @@ pub fn create(window: *core.Window) !Renderer {
     self.surface.getCapabilities(adapter, &surface_capabilities);
 
     log.info("configuring surface", .{});
-    const rect = window.getRect();
+    const rect = window.getClientRect();
     self.surface_config = wgpu.SurfaceConfiguration {
         .width = rect.width,
         .height = rect.height,

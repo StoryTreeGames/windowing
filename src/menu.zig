@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 
 pub const Checkable = struct {
     id: u32,
@@ -7,7 +6,11 @@ pub const Checkable = struct {
     default: bool = false,
 
     pub fn radio(identifier: []const u8, label: []const u8, default: bool) @This() {
-        return .{ .id = Id.init(identifier).value, .label = label, .default = default };
+        return .{
+            .id = Id.init(identifier).value,
+            .label = label,
+            .default = default,
+        };
     }
 };
 
@@ -31,15 +34,31 @@ pub const Item = union(enum) {
     pub const seperator: @This() = .seperator_item;
 
     pub fn action(identifier: []const u8, label: []const u8) @This() {
-        return .{ .action_item = .{ .id = Id.init(identifier).value, .label = label } };
+        return .{
+            .action_item = .{
+                .id = Id.init(identifier).value,
+                .label = label,
+            },
+        };
     }
 
     pub fn toggle(identifier: []const u8, label: []const u8, default: bool) @This() {
-        return .{ .toggle_item = .{ .id = Id.init(identifier).value, .label = label, .default = default } };
+        return .{
+            .toggle_item = .{
+                .id = Id.init(identifier).value,
+                .label = label,
+                .default = default,
+            },
+        };
     }
 
     pub fn submenu(label: [:0]const u8, items: []const Item) @This() {
-        return .{ .menu_item = .{ .label = label, .items = items } };
+        return .{
+            .menu_item = .{
+                .label = label,
+                .items = items,
+            },
+        };
     }
 
     pub fn group(radio_group: []const Checkable) @This() {
@@ -68,8 +87,12 @@ pub const Info = struct {
     menu: *anyopaque,
     payload: Payload,
 
-    pub const Payload = union(enum) { action: struct { label: [:0]const u8 }, toggle: struct { label: [:0]const u8 }, radio: struct {
-        group: std.meta.Tuple(&.{ usize, usize }),
-        label: [:0]const u8,
-    } };
+    pub const Payload = union(enum) {
+        action: struct { label: [:0]const u8 },
+        toggle: struct { label: [:0]const u8 },
+        radio: struct {
+            group: std.meta.Tuple(&.{ usize, usize }),
+            label: [:0]const u8,
+        },
+    };
 };

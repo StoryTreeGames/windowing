@@ -719,7 +719,7 @@ pub const IShellItem = extern struct {
         return attrs;
     }
 
-    pub fn release(self: *@This()) !u32 {
+    pub fn release(self: *@This()) u32 {
         var this: *IUnknown = @ptrCast(@alignCast(self));
         return this.Release();
     }

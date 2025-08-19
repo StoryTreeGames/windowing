@@ -1,6 +1,130 @@
+const kam = @import("win32").ui.input.keyboard_and_mouse;
 const VirtualKey = @import("../input.zig").VirtualKey;
 
-pub fn parseVirtualKey(wparam: usize, lparam: isize) ?VirtualKey {
+pub fn virtualKeyToCode(virtual_key: VirtualKey) i32 {
+    return switch (virtual_key) {
+        .back => 0x08,
+        .tab => 0x09,
+        .clear => 0x0c,
+        .@"return" => 0x0d,
+        .shift => 0x10,
+        .left_shift => 0xa0,
+        .right_shift => 0xa1,
+        .control => 0x11,
+        .left_control => 0xa2,
+        .right_control => 0xa3,
+        .alt => 0x12,
+        .left_alt => 0xa4,
+        .right_alt => 0xa5,
+        .pause => 0x13,
+        .caps_lock => 0x14,
+        .kana_hangul => 0x15,
+        .ime_on => 0x16,
+        .junja => 0x17,
+        .final => 0x18,
+        .hanja_kanji => 0x19,
+        .ime_off => 0x1a,
+        .escape => 0x1b,
+        .convert => 0x1c,
+        .nonconvert => 0x1d,
+        .accept => 0x1e,
+        .modechange => 0x1f,
+        .prior => 0x21,
+        .next => 0x22,
+        .end => 0x23,
+        .home => 0x24,
+        .left => 0x25,
+        .up => 0x26,
+        .right => 0x27,
+        .down => 0x28,
+        .select => 0x29,
+        .print => 0x2a,
+        .execute => 0x2b,
+        .snapshot => 0x2c,
+        .insert => 0x2d,
+        .delete => 0x2e,
+        .help => 0x2f,
+        .left_super => 0x5b,
+        .right_super => 0x5c,
+        .apps => 0x5d,
+        .sleep => 0x5f,
+        .numpad0 => 0x60,
+        .numpad1 => 0x61,
+        .numpad2 => 0x62,
+        .numpad3 => 0x63,
+        .numpad4 => 0x64,
+        .numpad5 => 0x65,
+        .numpad6 => 0x66,
+        .numpad7 => 0x67,
+        .numpad8 => 0x68,
+        .numpad9 => 0x69,
+        .multiply => 0x6a,
+        .add => 0x6b,
+        .separator => 0x6c,
+        .subtract => 0x6d,
+        .decimal => 0x6e,
+        .divide => 0x6f,
+        .f1 => 0x70,
+        .f2 => 0x71,
+        .f3 => 0x72,
+        .f4 => 0x73,
+        .f5 => 0x74,
+        .f6 => 0x75,
+        .f7 => 0x76,
+        .f8 => 0x77,
+        .f9 => 0x78,
+        .f10 => 0x79,
+        .f11 => 0x7a,
+        .f12 => 0x7b,
+        .f13 => 0x7c,
+        .f14 => 0x7d,
+        .f15 => 0x7e,
+        .f16 => 0x7f,
+        .f17 => 0x80,
+        .f18 => 0x81,
+        .f19 => 0x82,
+        .f20 => 0x83,
+        .f21 => 0x84,
+        .f22 => 0x85,
+        .f23 => 0x86,
+        .f24 => 0x87,
+        .num_lock => 0x90,
+        .scroll => 0x91,
+        .browser_back => 0xa6,
+        .browser_forward => 0xa7,
+        .browser_refresh => 0xa8,
+        .browser_stop => 0xa9,
+        .browser_search => 0xaa,
+        .browser_favorites => 0xab,
+        .browser_home => 0xac,
+        .volume_mute => 0xad,
+        .volume_down => 0xae,
+        .volume_up => 0xaf,
+        .media_next_track => 0xb0,
+        .media_prev_track => 0xb1,
+        .media_stop => 0xb2,
+        .media_play_pause => 0xb3,
+        .launch_mail => 0xb4,
+        .launch_media_select => 0xb5,
+        .launch_app1 => 0xb6,
+        .launch_app2 => 0xb7,
+        .oem_8 => 0xdf,
+        .oem_102 => 0xe2,
+        .processkey => 0xe5,
+        .packet => 0xe7,
+        .attn => 0xf6,
+        .crsel => 0xf7,
+        .exsel => 0xf8,
+        .ereof => 0xf9,
+        .play => 0xfa,
+        .zoom => 0xfb,
+        .noname => 0xfc,
+        .pa1 => 0xfd,
+        .oem_clear => 0xFE,
+    };
+}
+
+pub fn codeToVirtualKey(wparam: usize, lparam: isize) ?VirtualKey {
     _ = lparam;
     return switch (wparam) {
         0x08 => .back,
@@ -38,7 +162,8 @@ pub fn parseVirtualKey(wparam: usize, lparam: isize) ?VirtualKey {
         0x2d => .insert,
         0x2e => .delete,
         0x2f => .help,
-        0x5b, 0x5c => .super,
+        0x5b => .left_super,
+        0x5c => .right_super,
         0x5d => .apps,
         0x5f => .sleep,
         0x60 => .numpad0,
@@ -116,4 +241,37 @@ pub fn parseVirtualKey(wparam: usize, lparam: isize) ?VirtualKey {
         0xFE => .oem_clear,
         else => null,
     };
+}
+
+/// Get whether the key is down
+pub fn getKeyState(key: anytype) bool {
+    const KEY = @TypeOf(key);
+    var value = switch (KEY) {
+        u8, u21, u32, comptime_int => @as(i32, @bitCast(@as(u32, @intCast(key)))),
+        VirtualKey, @Type(.enum_literal) => virtualKeyToCode(key),
+        else => @compileError("expected char or virtual key")
+    };
+
+    if (key >= 97 and key <= 122) {
+        value = value - 32;
+    }
+
+    return (kam.GetKeyState(value) & 0x80) != 0;
+}
+
+/// Get whether the key has been set since the last
+/// call to this function
+pub fn getAsyncKeyState(key: anytype) bool {
+    const KEY = @TypeOf(key);
+    var value = switch (KEY) {
+        u8, u21, u32, comptime_int => @as(i32, @bitCast(@as(u32, @intCast(key)))),
+        VirtualKey, @Type(.enum_literal) => virtualKeyToCode(key),
+        else => @compileError("expected char or virtual key")
+    };
+
+    if (key >= 97 and key <= 122) {
+        value = value - 32;
+    }
+
+    return (kam.GetAsyncKeyState(value) & 0x01) != 0;
 }

@@ -1,6 +1,10 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const input = @import("input.zig");
+
+const impl = switch (@import("builtin").os.tag) {
+    .windows => @import("windows/event.zig"),
+    else => @compileError("platform not supported"),
+};
 
 const Window = @import("window.zig");
 const Key = input.Key;
@@ -31,7 +35,7 @@ pub const KeyEvent = struct {
         const KEY = @TypeOf(key);
 
         const key_match = switch (KEY) {
-            u8, u21, u32, comptime_int => self.key == .char and @as(u21, @intCast(key)) == @as(u21, @intCast(std.mem.readInt(u32, self.key.char, .big))),
+            u8, u21, u32, comptime_int => self.key == .char and @as(u21, @intCast(key)) == @as(u21, @truncate(std.mem.readInt(u32, &self.key.char, .little))),
             input.VirtualKey, @Type(.enum_literal) => self.key == .virtual and self.key.virtual == key,
             else => @compileError("unsupported key type '" ++ @typeName(@TypeOf(key)) ++ "': expected u8, u21, u32, or virtual key"),
         };
@@ -94,22 +98,13 @@ pub const MenuEvent = struct {
     item: *MenuInfo,
 
     pub fn toggle(self: *const @This(), state: bool) void {
-        switch (builtin.os.tag) {
-            .windows => {
-                const wam = @import("win32").ui.windows_and_messaging;
-                switch (self.item.payload) {
-                    .toggle => {
-                        _ = wam.CheckMenuItem(@ptrCast(@alignCast(self.item.menu)), self.id, if (state) 0x8 else 0x0);
-                    },
-                    .radio => |r| {
-                        _ = wam.CheckMenuRadioItem(@ptrCast(@alignCast(self.item.menu)), @intCast(r.group[0]), @intCast(r.group[0]), self.id, 0x0);
-                    },
-                    else => {},
-                }
-            },
-            else => @compileError("platform not supported"),
-        }
+        impl.toggleMenuItem(self.id, self.item, state);
     }
+};
+
+pub const WindowEvent = struct {
+    window: *Window,
+    event: Event,
 };
 
 pub const Event = union(enum) {
@@ -134,75 +129,56 @@ pub const Event = union(enum) {
     theme: enum { light, dark },
 };
 
-pub const EventLoop = struct {
-    arena: std.heap.ArenaAllocator,
-    state: *anyopaque,
+pub fn QueueUnmanaged(comptime T: type) type {
+    return struct {
+        mutex: std.Thread.Mutex = .{},
+        items: std.DoublyLinkedList(T) = .{},
 
-    handler: *const fn (*EventLoop, *anyopaque, *Window, Event) anyerror!bool,
-    windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
+        pub const Self = @This();
+        pub const Node = std.DoublyLinkedList(T).Node;
 
-    pub fn init(allocator: std.mem.Allocator, state: anytype) !*@This() {
-        const State: type = switch (@typeInfo(@TypeOf(state))) {
-            .pointer => |pointer| pointer.child,
-            else => @TypeOf(state),
-        };
+        pub fn append(self: *Self, allocator: std.mem.Allocator, value: T) !void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
 
-        var arena = std.heap.ArenaAllocator.init(allocator);
-        errdefer arena.deinit();
-        const allo = arena.allocator();
-
-        const Handler = struct {
-            pub fn handleEvent(event_loop: *EventLoop, data: *anyopaque, win: *Window, event: Event) !bool {
-                const s: *State = @ptrCast(@alignCast(data));
-                if (@hasDecl(State, "handleEvent")) {
-                    const func = @field(State, "handleEvent");
-                    return func(s, event_loop, win, event);
-                }
-            }
-        };
-
-        const el = try allo.create(@This());
-        el.* = .{
-            .arena = arena,
-            .state = @ptrCast(@alignCast(state)),
-            // Type erased event handler that propagates the os specific event back to the event_loop and state handler
-            .handler = Handler.handleEvent,
-        };
-
-        if (@hasDecl(State, "setup")) {
-            const func = @field(State, "setup");
-            const F = @TypeOf(func);
-            const params = @typeInfo(F).@"fn".params;
-            const rtrn = @typeInfo(F).@"fn".return_type.?;
-
-            var args: std.meta.ArgsTuple(F) = undefined;
-            inline for (params, 0..) |param, i| {
-                args[i] = switch (param.type.?) {
-                    *State, *const State => state,
-                    *@This(), *const @This() => el,
-                    else => @compileError("invalid event loop handler argument type: " ++ @typeName(State)),
-                };
-            }
-
-            if (@typeInfo(rtrn) == .error_union) {
-                try @call(.auto, func, args);
-            } else {
-                @call(.auto, func, args);
-            }
+            const new_node = try allocator.create(Node);
+            new_node.data = value;
+            self.items.append(new_node);
         }
 
-        return el;
+        pub fn pop(self: *Self, allocator: std.mem.Allocator) ?T {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            if (self.items.popFirst()) |value| {
+                const inner = value.data;
+                defer allocator.destroy(value);
+                return inner;
+            }
+            return null;
+        }
+
+        pub fn isEmpty(self: *Self) bool {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            return self.items.len == 0;
+        }
+    };
+}
+
+pub const EventLoop = struct {
+    arena: std.heap.ArenaAllocator,
+
+    windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
+    queue: QueueUnmanaged(std.meta.Tuple(&.{ usize, Event })) = .{},
+
+    pub fn init(allocator: std.mem.Allocator) !@This() {
+        return .{ .arena = std.heap.ArenaAllocator.init(allocator) };
     }
 
     pub fn setAppId(self: *const @This(), app_id: []const u8) !void {
-        switch (builtin.os.tag) {
-            .windows => {
-                const id = try std.unicode.utf8ToUtf16LeAllocZ(self.arena.allocator(), app_id);
-                defer self.arena.allocator().free(id);
-                try @import("windows/event.zig").setAppId(id);
-            },
-            else => @compileError("platform not supported"),
-        }
+        try impl.setAppId(self.arena.allocator(), app_id);
     }
 
     pub fn deinit(self: *@This()) void {
@@ -232,38 +208,25 @@ pub const EventLoop = struct {
         return self.windows.count() > 0;
     }
 
-    pub fn poll(self: *@This()) !bool {
-        _ = self;
-
-        switch (builtin.os.tag) {
-            .windows => {
-                return try @import("windows/event.zig").EventLoop.pollMessages();
-            },
-            else => @compileError("platform not supported"),
+    pub fn poll(self: *@This()) !?WindowEvent {
+        _ = try impl.poll();
+        if (self.queue.pop(self.arena.allocator())) |data| {
+            if (self.windows.get(data[0])) |win| {
+                return .{ .window = win, .event = data[1] };
+            }
         }
-    }
-
-    pub fn run(self: *@This()) !void {
-        switch (builtin.os.tag) {
-            .windows => {
-                try @import("windows/event.zig").EventLoop.messageLoop(self);
-            },
-            else => @compileError("platform not supported"),
-        }
+        return null;
     }
 
     pub fn handleEvent(self: *@This(), args: anytype) bool {
-        switch (builtin.os.tag) {
-            .windows => {
-                if (self.windows.get(@intFromPtr(args[0]))) |win| {
-                    const event = @import("windows/event.zig").parseEvent(win, args[0], args[1], args[2], args[3]);
-                    if (event) |e| {
-                        return self.handler(self, self.state, win, e) catch false;
-                    }
-                }
-                return false;
-            },
-            else => @compileError("platform not supported"),
+        const winId = impl.parseWindowId(args);
+        if (self.windows.get(winId)) |win| {
+            const event = impl.parseEvent(win, args);
+            if (event) |e| {
+                self.queue.append(self.arena.allocator(), .{ winId, e }) catch return false;
+                return true;
+            }
         }
+        return false;
     }
 };

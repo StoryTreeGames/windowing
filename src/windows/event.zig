@@ -6,6 +6,7 @@ const foundation = @import("win32").foundation;
 const keyboard_and_mouse = @import("win32").ui.input.keyboard_and_mouse;
 const zig = @import("win32").zig;
 
+const MenuInfo = @import("../menu.zig").Info;
 const event = @import("../event.zig");
 const input = @import("input.zig");
 const util = @import("./util.zig");
@@ -28,28 +29,32 @@ const VK_RSHIFT = keyboard_and_mouse.VK_RSHIFT;
 
 const PRESSED: u8 = 0b10000000;
 
-pub const EventLoop = struct {
-    pub fn messageLoop(event_loop: *event.EventLoop) !void {
-        var message: windows_and_messaging.MSG = undefined;
-        while (event_loop.isActive() and windows_and_messaging.GetMessageW(&message, null, 0, 0) == zig.TRUE) {
-            _ = windows_and_messaging.TranslateMessage(&message);
-            _ = windows_and_messaging.DispatchMessageW(&message);
-        }
+pub fn poll() !bool {
+    var message: windows_and_messaging.MSG = undefined;
+    if (windows_and_messaging.PeekMessageW(&message, null, 0, 0, windows_and_messaging.PM_REMOVE) != 0) {
+        _ = windows_and_messaging.TranslateMessage(&message);
+        _ = windows_and_messaging.DispatchMessageW(&message);
+        return true;
     }
+    return false;
+}
 
-    pub fn pollMessages() !bool {
-        var message: windows_and_messaging.MSG = undefined;
-        if (windows_and_messaging.PeekMessageW(&message, null, 0, 0, windows_and_messaging.PM_REMOVE) != 0) {
-            _ = windows_and_messaging.TranslateMessage(&message);
-            _ = windows_and_messaging.DispatchMessageW(&message);
-            return true;
-        }
-        return false;
+pub fn setAppId(allocator: std.mem.Allocator, id: []const u8) !void {
+    const wid: [:0]const u16 = try std.unicode.utf8ToUtf16LeAllocZ(allocator, id);
+    defer allocator.free(wid);
+    if (util.SetCurrentProcessExplicitAppUserModelID(wid.ptr) != util.S_OK) return error.UnknownError;
+}
+
+pub fn toggleMenuItem(id: u32, item: *MenuInfo, state: bool) void {
+    switch (item.payload) {
+        .toggle => {
+            _ = windows_and_messaging.CheckMenuItem(@ptrCast(@alignCast(item.menu)), id, if (state) 0x8 else 0x0);
+        },
+        .radio => |r| {
+            _ = windows_and_messaging.CheckMenuRadioItem(@ptrCast(@alignCast(item.menu)), @intCast(r.group[0]), @intCast(r.group[0]), id, 0x0);
+        },
+        else => {},
     }
-};
-
-pub fn setAppId(id: [:0]const u16) !void {
-    if (util.SetCurrentProcessExplicitAppUserModelID(id.ptr) != util.S_OK) return error.UnknownError;
 }
 
 fn getKeyboardState(keyboard: *[256]u8) void {
@@ -80,14 +85,22 @@ fn getModifiers(keyboard: *const [256]u8) Modifiers {
     return modifiers;
 }
 
+const EventArgs = std.meta.Tuple(&.{ foundation.HWND, u32, usize, isize });
+
+pub fn parseWindowId(args: EventArgs) usize {
+    return @intFromPtr(args[0]);
+}
+
 const ImmersiveColorSet: [:0]const u8 = "ImmersiveColorSet\x00";
-pub fn parseEvent(win: *Window, hwnd: foundation.HWND, message: u32, wparam: usize, lparam: isize) ?Event {
+pub fn parseEvent(win: *Window, args: EventArgs) ?Event {
+    const hwnd: foundation.HWND, const message: u32, const wparam: usize, const lparam: isize = args;
     _ = hwnd;
+
     switch (message) {
         windows_and_messaging.WM_SETTINGCHANGE => {
-            const name: [*:0]const u16 = @ptrFromInt(@as(usize, @bitCast(lparam)));
-
             if (win.getTheme() == .system) {
+                const name: [*:0]const u16 = @ptrFromInt(@as(usize, @bitCast(lparam)));
+
                 const isImmersiveColorSet = for (0..18) |i| {
                     if (@as(u8, @intCast(name[i])) != ImmersiveColorSet[i]) break false;
                 } else true;
@@ -95,7 +108,7 @@ pub fn parseEvent(win: *Window, hwnd: foundation.HWND, message: u32, wparam: usi
                 if (isImmersiveColorSet) {
                     if (util.isLightTheme()) |isLight| {
                         if (isLight != win.getCurrentTheme().isLight()) {
-                            win.inner.setCurrentTheme(if (isLight) .light else .dark);
+                            win.impl.setCurrentTheme(if (isLight) .light else .dark);
                             return .{ .theme = if (win.getCurrentTheme() == .light) .light else .dark };
                         }
                     } else |_| {}
@@ -108,8 +121,9 @@ pub fn parseEvent(win: *Window, hwnd: foundation.HWND, message: u32, wparam: usi
             return Event.close;
         },
         windows_and_messaging.WM_SETCURSOR => {
-            // Set user defined cursor
-            _ = windows_and_messaging.SetCursor(Window.Inner.getHCursor(win.inner.cursor));
+            // Set user defined cursor when the mouse moves within the window
+            _ = windows_and_messaging.SetCursor(Window.Impl.getHCursor(win.impl.cursor));
+
             // Allow for resize cursor to be drawn if cursor is at correct position
             // return windows_and_messaging.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
@@ -117,7 +131,7 @@ pub fn parseEvent(win: *Window, hwnd: foundation.HWND, message: u32, wparam: usi
             const wmId: u16 = @truncate(wparam);
             const wmEvent: u16 = @truncate(wparam >> 16);
             if (wmEvent == 0) {
-                const menu_info = win.inner.itemToMenu.getPtr(@intCast(wmId));
+                const menu_info = win.impl.itemToMenu.getPtr(@intCast(wmId));
                 if (menu_info) |info| {
                     return Event{ .menu = .{
                         .id = @intCast(wmId),
@@ -181,7 +195,7 @@ pub fn parseEvent(win: *Window, hwnd: foundation.HWND, message: u32, wparam: usi
             }
         },
         windows_and_messaging.WM_KEYDOWN => {
-            if (input.parseVirtualKey(wparam, lparam)) |key| {
+            if (input.codeToVirtualKey(wparam, lparam)) |key| {
                 // Keyboard state to better match keyboard input with virtual keys
                 var keyboard: [256]u8 = [_]u8{0} ** 256;
                 getKeyboardState(&keyboard);

@@ -14,21 +14,8 @@ pub const App = struct {
     allocator: std.mem.Allocator,
     watch: bool = false,
 
-    pub fn setup(self: *@This(), event_loop: *EventLoop) !void {
-        const win = try event_loop.createWindow(.{ .width = 800, .height = 600 });
-        try win.setMenu(&.{
-            .submenu("File", &.{
-                .action("file::open", "Open"),
-                .action("file::save", "Save"),
-                .action("file::save-as", "Save As"),
-                .seperator,
-                .toggle("file::watch", "Watch", self.watch),
-            }),
-            .action("quit", "Quit"),
-        });
-    }
-
-    pub fn handleEvent(self: *@This(), event_loop: *EventLoop, win: *Window, evt: Event) !bool {
+    pub fn handleEvent(self: *@This(), event_loop: *EventLoop, win: *Window, evt: Event) !void {
+        // making it easier to deinitialize the memory allocated for open and save dialogs
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         defer arena.deinit();
 
@@ -62,9 +49,8 @@ pub const App = struct {
                 .light => std.debug.print("Now using light theme\n", .{}),
                 .dark => std.debug.print("Now using dark theme\n", .{}),
             },
-            else => return false,
+            else => {},
         }
-        return true;
     }
 };
 
@@ -80,8 +66,25 @@ pub fn main() !void {
     });
 
     var app = App{ .allocator = allocator };
-    var event_loop = try EventLoop.init(allocator, &app);
+
+    var event_loop = try EventLoop.init(allocator);
     defer event_loop.deinit();
 
-    try event_loop.run();
+    const win = try event_loop.createWindow(.{ .width = 800, .height = 600 });
+    try win.setMenu(&.{
+        .submenu("File", &.{
+            .action("file::open", "Open"),
+            .action("file::save", "Save"),
+            .action("file::save-as", "Save As"),
+            .seperator,
+            .toggle("file::watch", "Watch", app.watch),
+        }),
+        .action("quit", "Quit"),
+    });
+
+    while (event_loop.isActive()) {
+        if (try event_loop.poll()) |data| {
+            try app.handleEvent(&event_loop, data.window, data.event);
+        }
+    }
 }

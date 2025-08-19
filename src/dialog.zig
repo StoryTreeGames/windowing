@@ -1,7 +1,9 @@
 const std = @import("std");
-const builtin = @import("builtin");
 
-const windows_impl = @import("windows/dialog.zig");
+const impl = switch(@import("builtin").os.tag) {
+    .windows => @import("windows/dialog.zig"),
+    else => @compileError("platform not supported")
+};
 
 const Color = @import("./root.zig").Color;
 const Font = @import("./root.zig").Font;
@@ -69,62 +71,7 @@ pub const MessageOptions = struct {
 };
 
 pub fn message(buttons: ?Buttons, opts: MessageOptions) ?Button {
-    switch (builtin.os.tag) {
-        .windows => return windows_impl.message(buttons, opts),
-        else => @compileError("platform not supported"),
-    }
-    return null;
-}
-
-fn configureFileDialog(allocator: std.mem.Allocator, dialog: anytype, options: anytype) !void {
-    switch (builtin.os.tag) {
-        .windows => {
-            const util = @import("windows/util.zig");
-
-            if (options.folder.len > 0) {
-                const path = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.folder);
-                var default_folder: *anyopaque = undefined;
-
-                const result = util.SHCreateItemFromParsingName(path.ptr, null, &util.IShellItem.UUID, &default_folder);
-                if (result != util.S_OK) return error.Win32Error;
-                try dialog.setFolder(@ptrCast(@alignCast(default_folder)));
-            }
-
-            if (options.file_name.len > 0) {
-                const path = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.file_name);
-                try dialog.setFileName(path.ptr);
-            }
-
-            if (options.filters.len > 0) {
-                try addFileDialogFilters(allocator, dialog, options.filters);
-            }
-
-            if (options.title.len > 0) {
-                const title = try std.unicode.utf8ToUtf16LeAllocZ(allocator, options.title);
-                try dialog.setTitle(title.ptr);
-            }
-        },
-        else => @compileError("platform not supported"),
-    }
-}
-
-fn addFileDialogFilters(allocator: std.mem.Allocator, dialog: anytype, types: []const std.meta.Tuple(&.{ []const u8, []const u8 })) !void {
-    switch (builtin.os.tag) {
-        .windows => {
-            const util = @import("windows/util.zig");
-            const filters = try allocator.alloc(util.COMDLG_FILTERSPEC, types.len);
-            for (types, 0..) |filter, i| {
-                const name = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[0]);
-                const spec = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filter[1]);
-                filters[i] = util.COMDLG_FILTERSPEC{
-                    .pszName = name.ptr,
-                    .pszSpec = spec.ptr,
-                };
-            }
-            try dialog.setFileTypes(filters);
-        },
-        else => @compileError("platform not supported"),
-    }
+    return impl.message(buttons, opts);
 }
 
 pub const FileOpenDialogOptions = struct {
@@ -152,12 +99,9 @@ pub const FileOpenDialogOptions = struct {
     exists: bool = true,
 };
 
-/// Caller is responsible for freeing the returned array of strings
+/// Caller is responsible for freeing the returned array of selected paths
 pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const []const u8 {
-    switch (builtin.os.tag) {
-        .windows => return try windows_impl.open(allocator, opts),
-        else => @compileError("platform not supported"),
-    }
+    return impl.open(allocator, opts);
 }
 
 pub const FileSaveDialogOptions = struct {
@@ -182,10 +126,7 @@ pub const FileSaveDialogOptions = struct {
 };
 
 pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const u8 {
-    switch (builtin.os.tag) {
-        .windows => return try windows_impl.save(allocator, opts),
-        else => @compileError("platform not supported"),
-    }
+    return impl.save(allocator, opts);
 }
 
 pub const ColorOptions = struct {
@@ -195,10 +136,7 @@ pub const ColorOptions = struct {
 };
 
 pub fn color(options: ColorOptions) !?Color {
-    switch (builtin.os.tag) {
-        .windows => return try windows_impl.color(options),
-        else => @compileError("platform not supported"),
-    }
+    return impl.color(options);
 }
 
 pub const FontOptions = struct {
@@ -211,8 +149,5 @@ pub const FontOptions = struct {
 
 /// Caller is responsible for freeing the returned `Font.name`
 pub fn font(allocator: std.mem.Allocator, options: FontOptions) !?Font {
-    switch (builtin.os.tag) {
-        .windows => return try windows_impl.font(allocator, options),
-        else => @compileError("platform not supported"),
-    }
+    return impl.font(allocator, options);
 }

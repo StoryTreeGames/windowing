@@ -5,6 +5,7 @@
 // https://github.com/bronter/wgpu-native-zig-windows-test
 
 const std = @import("std");
+const log = std.log.scoped(.app);
 const Renderer = @import("renderer.zig");
 
 const event = @import("storytree-core").event;
@@ -16,21 +17,16 @@ const Event = event.Event;
 pub const App = struct {
     renderer: Renderer,
 
-    pub fn init() @This() {
-        return undefined;
-    }
-
     pub fn deinit(self: *@This()) void {
         self.renderer.release();
     }
 
-    pub fn handleEvent(self: *@This(), event_loop: *EventLoop, win: *Window, evt: Event) !bool {
+    pub fn handleEvent(self: *@This(), event_loop: *EventLoop, win: *Window, evt: Event) !void {
         switch (evt) {
             .close => event_loop.closeWindow(win.id()),
             .resize => |size| self.renderer.resize(size.width, size.height),
-            else => return false,
+            else => {},
         }
-        return true;
     }
 };
 
@@ -40,17 +36,11 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    std.log.info("----- Event Loop -----", .{});
-    std.log.info("Creating App", .{});
-    var app = App.init();
-    defer app.deinit();
-
-    std.log.info("Creating EventLoop", .{});
-    var event_loop = try EventLoop.init(allocator, &app);
+    log.info("creating event loop", .{});
+    var event_loop = try EventLoop.init(allocator);
     defer event_loop.deinit();
 
-    std.log.info("----- Window -----", .{});
-    std.log.info("Creating Window", .{});
+    log.info("creating window", .{});
     const win = try event_loop.createWindow(.{
         .title = "wgpu-native-zig windows example",
         .width = 640,
@@ -60,11 +50,13 @@ pub fn main() !void {
         // .cursor = .{ .icon = .pointer },
     });
 
-    std.log.info("----- Renderer -----", .{});
-    app.renderer = try Renderer.create(win);
+    var app = App{ .renderer = try Renderer.create(win) };
+    defer app.deinit();
 
     while (event_loop.isActive()) {
-        if (!try event_loop.poll()) {
+        if (try event_loop.poll()) |data| {
+            try app.handleEvent(&event_loop, data.window, data.event);
+        } else {
             app.renderer.render() catch break;
         }
     }

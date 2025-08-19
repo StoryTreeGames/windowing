@@ -1,5 +1,7 @@
 const wam = @import("win32").ui.windows_and_messaging;
+const zig = @import("win32").zig;
 const CursorType = @import("../cursor.zig").CursorType;
+const Rect = @import("../root.zig").Rect;
 
 pub fn cursorToResource(cursor: CursorType) [*:0]align(1) const u16 {
     return switch (cursor) {
@@ -39,4 +41,20 @@ pub fn cursorToResource(cursor: CursorType) [*:0]align(1) const u16 {
         .copy => wam.IDC_ARROW,
         .zoom_in => wam.IDC_ARROW,
     };
+}
+
+/// Show or hide the cursor
+pub fn showCursor(state: bool) void {
+    _ = wam.ShowCursor(if (state) zig.TRUE else zig.FALSE);
+}
+
+/// Restrict the cursor to the bounds of the provided Rect. If the bounds is null
+/// it will remove any restriction on the cursors movement.
+pub fn clipCursor(bounds: ?Rect(u32)) void {
+    _ = wam.ClipCursor(if (bounds) |b| .{
+        .left = @bitCast(b.x),
+        .top = @bitCast(b.y),
+        .right = @bitCast(b.x + b.width),
+        .bottom = @bitCast(b.y + b.height),
+    } else null);
 }

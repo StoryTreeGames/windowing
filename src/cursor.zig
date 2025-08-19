@@ -81,3 +81,11 @@ pub const CursorType = enum(u8) {
     copy,
     zoom_in,
 };
+
+const impl = switch(@import("builtin").os.tag) {
+    .windows => @import("windows/cursor.zig"),
+    else => @compileError("platform not supported"),
+};
+
+pub const showCursor = impl.showCursor;
+pub const clipCursor = impl.clipCursor;

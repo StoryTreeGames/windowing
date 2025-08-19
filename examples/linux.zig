@@ -1,3 +1,6 @@
+// Wayland: https://zig.news/leroycep/wayland-from-the-wire-part-1-12a1
+// X11: https://www.youtube.com/watch?v=aPWFLkHRIAQ
+
 const std = @import("std");
 const mem = std.mem;
 const posix = std.posix;
