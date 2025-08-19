@@ -11,6 +11,11 @@ queue: *wgpu.Queue,
 surface_config: wgpu.SurfaceConfiguration,
 pipeline: *wgpu.RenderPipeline,
 
+width: u32 = 0,
+height: u32 = 0,
+resizeWidth: u32 = 0,
+resizeHeight: u32 = 0,
+
 pub fn create(window: *core.Window) !Renderer {
     var self: Renderer = undefined;
 
@@ -57,6 +62,10 @@ pub fn create(window: *core.Window) !Renderer {
 
     log.info("configuring surface", .{});
     const rect = window.getClientRect();
+    self.width = rect.width;
+    self.height = rect.height;
+    self.resizeWidth = rect.width;
+    self.resizeHeight = rect.height;
     self.surface_config = wgpu.SurfaceConfiguration {
         .width = rect.width,
         .height = rect.height,
@@ -112,14 +121,22 @@ pub fn create(window: *core.Window) !Renderer {
     return self;
 }
 
-pub fn resize(self: *Renderer, width: u32, height: u32) void {
-    log.info("resize surface {d} x {d}", .{ width, height });
-    self.surface_config.width = @max(width, 1);
-    self.surface_config.height = @max(height, 1);
-    self.surface.configure(&self.surface_config);
+pub fn resize(self: *Renderer, w: u32, h: u32) void {
+    log.info("resize surface {d} x {d}", .{ w, h });
+    self.resizeWidth = w;
+    self.resizeHeight = h;
 }
 
 pub fn render(self: *Renderer) !void {
+    if (self.width != self.resizeWidth or self.height != self.resizeHeight) {
+        self.width = self.resizeWidth;
+        self.height = self.resizeHeight;
+
+        self.surface_config.width = @max(self.width, 1);
+        self.surface_config.height = @max(self.height, 1);
+        self.surface.configure(&self.surface_config);
+    }
+
     var surface_texture: wgpu.SurfaceTexture = undefined;
     self.surface.getCurrentTexture(&surface_texture);
     if (surface_texture.status != wgpu.GetCurrentTextureStatus.success) {

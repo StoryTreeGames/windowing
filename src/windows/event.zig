@@ -92,6 +92,7 @@ pub fn parseWindowId(args: EventArgs) usize {
 }
 
 const ImmersiveColorSet: [:0]const u8 = "ImmersiveColorSet\x00";
+var resize: ?util.RECT = null;
 pub fn parseEvent(win: *Window, args: EventArgs) ?Event {
     const hwnd: foundation.HWND, const message: u32, const wparam: usize, const lparam: isize = args;
     _ = hwnd;
@@ -260,14 +261,20 @@ pub fn parseEvent(win: *Window, args: EventArgs) ?Event {
         // Check for focus and unfocus
         windows_and_messaging.WM_SETFOCUS => return Event{ .focused = true },
         windows_and_messaging.WM_KILLFOCUS => return Event{ .focused = false },
-        windows_and_messaging.WM_SIZE => {
-            const size: usize = @intCast(lparam);
-            return Event{
-                .resize = .{
-                    .width = @intCast(@as(u16, @truncate(size))),
-                    .height = @intCast(@as(u16, @truncate(size >> 16))),
-                },
-            };
+        windows_and_messaging.WM_EXITSIZEMOVE => {
+            defer resize = null;
+            if (resize) |rect| {
+                return Event{
+                    .resize = .{
+                        .width = @bitCast(rect.right - rect.left),
+                        .height = @bitCast(rect.bottom - rect.top),
+                    },
+                };
+            }
+        },
+        windows_and_messaging.WM_SIZING => {
+            const size: *util.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+            resize = size.*;
         },
         else => return null,
     }
