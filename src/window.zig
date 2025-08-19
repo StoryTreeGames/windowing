@@ -1,72 +1,130 @@
-/// A platform specific window implementation.
-///
-/// This contains methods for creating and manipulating windows, but stops
-/// short of the full features that allow for full UI creation. The idea is that
-/// other libraries can be used with this one, like Vulkan, to render UI onto
-/// the window seperatly.
-///
-/// ## Features
-/// - size
-/// - title
-/// - placement
-/// - show/hide
-/// - icon
-/// - background
-/// - theme (dark/light)
-/// - minimize
-/// - maximize
-/// - fullscreen
-/// - menu
 const std = @import("std");
-const builtin = @import("builtin");
-const Cursor = @import("cursor.zig").Cursor;
+const Rect = @import("root.zig").Rect;
+
 const Icon = @import("icon.zig").Icon;
+const Cursor = @import("cursor.zig").Cursor;
+const EventLoop = @import("event.zig").EventLoop;
+const MenuItem = @import("menu.zig").Item;
 
-const Tag = @import("std").Target.Os.Tag;
-
-pub const Error = error{ InvalidUtf8, OutOfMemory, FileNotFound, SystemCreateWindow };
-
-/// Cross platform window representation
-pub const Window = switch (builtin.target.os.tag) {
-    Tag.windows => @import("window/windows.zig"),
-    Tag.linux => @import("window/linux.zig"),
-    Tag.macos => @import("window/apple.zig"),
-    else => @compileError("znwl doesn't support the current operating system: " ++ @tagName(builtin.target.os.tag)),
+pub const Inner = switch (@import("builtin").os.tag) {
+    .windows => @import("windows/window.zig"),
+    else => @compileError("platform not supported")
 };
 
-pub const ShowState = enum { maximize, minimize, restore, fullscreen };
-pub const Theme = enum { dark, light, auto };
+pub const Theme = enum {
+    light,
+    dark,
+    system,
 
-/// Options to apply to a window when it is created
-///
-/// Ref: https://docs.rs/winit/latest/winit/window/struct.Window.html#method.set_window_level
-/// for ideas on what options to have
-/// - [ ] Level
-/// - [ ] Cursor
-/// - [ ] Auto update theme
-pub const CreateOptions = struct {
-    /// The title of the window
+    pub fn isLight(self: *const @This()) bool {
+        return self.* == .light;
+    }
+    pub fn isDark(self: *const @This()) bool {
+        return self.* == .dark;
+    }
+};
+
+pub const Show = enum { maximize, minimize, restore, fullscreen };
+
+pub const Options = struct {
     title: []const u8 = "",
-
-    /// X position of the top left corner
-    x: ?i32 = null,
-    /// Y position of the top left corner
-    y: ?i32 = null,
-    /// Width of the window
-    width: ?i32 = null,
-    /// Height of the window
-    height: ?i32 = null,
-
-    /// Whether the window should be shown
-    // show: bool = true,
-    /// Whether the window should be maximized, minimized, fullscreen, or restored
-    state: ShowState = .restore,
-    /// Change whether the window can be resized
+    x: ?u32 = null,
+    y: ?u32 = null,
+    width: ?u32 = null,
+    height: ?u32 = null,
+    icon: Icon = .Default,
+    cursor: Cursor = .Default,
     resizable: bool = true,
-
-    icon: Icon = .{ .icon = .default },
-    cursor: Cursor = .{ .icon = .default },
-
-    /// Set to dark or light theme. Or set to auto to match the system theme
-    theme: Theme = .auto,
+    theme: Theme = .system,
+    show: Show = .restore,
 };
+
+arena: std.heap.ArenaAllocator,
+
+inner: *Inner,
+alive: bool,
+
+pub fn init(allocator: std.mem.Allocator, options: Options, event_loop: *EventLoop) !@This() {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    errdefer arena.deinit();
+
+    return .{
+        .inner = try Inner.init(arena.allocator(), options, event_loop),
+        .alive = true,
+        .arena = arena,
+    };
+}
+
+pub fn deinit(self: *@This()) void {
+    self.inner.destroy();
+    self.arena.deinit();
+}
+
+pub fn id(self: *const @This()) usize {
+    return self.inner.id();
+}
+
+/// Minimize the window
+pub fn minimize(self: *const @This()) void {
+    self.inner.minimize();
+}
+
+/// Maximize the window
+pub fn maximize(self: *const @This()) void {
+    self.inner.maximize();
+}
+
+/// Restore the window to its default windowed state
+pub fn restore(self: *const @This()) void {
+    self.inner.restore();
+}
+
+/// Get the windows current rect (bounding box)
+pub fn getRect(self: *const @This()) Rect(u32) {
+    return self.inner.getRect();
+}
+
+/// Get the windows configured theme
+pub fn getTheme(self: *@This()) Theme {
+    return self.inner.getTheme();
+}
+
+/// Get the windows current theme
+pub fn getCurrentTheme(self: *@This()) Theme {
+    return self.inner.getCurrentTheme();
+}
+
+/// Set window title
+pub fn setTitle(self: *@This(), title: []const u8) !void {
+    try self.inner.setTitle(self.arena.allocator(), title);
+}
+
+/// Set window icon
+pub fn setIcon(self: *@This(), new_icon: Icon) !void {
+    try self.inner.setIcon(self.arena.allocator(), new_icon);
+}
+
+/// Set window cursor
+pub fn setCursor(self: *@This(), new_cursor: Cursor) !void {
+    try self.inner.setCursor(self.arena.allocator(), new_cursor);
+}
+
+/// Set the cursors position relative to the window
+pub fn setCursorPos(self: *@This(), x: u32, y: u32) void {
+    self.inner.setCursorPos(@intCast(x), @intCast(y));
+}
+
+/// Set the mouse to be captured by the window, or release it from the window
+pub fn setCapture(self: *@This(), state: bool) void {
+    self.inner.setCapture(state);
+}
+
+/// Set or replace the window's menu bar
+pub fn setMenu(self: *@This(), menu: ?[]const MenuItem) !void {
+    try self.inner.setMenu(self.arena.allocator(), menu);
+}
+
+/// Set the window's configured theme
+pub fn setTheme(self: *@This(), theme: Theme) void {
+    self.inner.setTheme(theme);
+}

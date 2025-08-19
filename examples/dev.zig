@@ -1,167 +1,151 @@
 const std = @import("std");
 
-pub const core = @import("storytree-core");
+const core = @import("storytree-core");
+const event = core.event;
 
-const Window = core.Window;
-const Event = core.event.Event;
-const Icon = core.icon.Icon;
-const Cursor = core.cursor.Cursor;
-const EventLoop = core.event.EventLoop;
+const Window = @import("storytree-core").Window;
+const EventLoop = event.EventLoop;
+const Event = event.Event;
 
-const State = struct {
-    captured: bool = false,
-    focused: bool = false,
+pub const App = struct {
+    allocator: std.mem.Allocator,
+    cursor: core.cursor.Cursor = .Default,
+    pos: enum { tl, tr, bl, br } = .tl,
 
-    cursor: enum { pointer, default } = .default,
-    icon: enum { default, security } = .default,
-    title: enum { first, second } = .first,
+    pub fn setup(self: *const @This(), event_loop: *EventLoop) !void {
+        const title = try std.fmt.allocPrint(self.allocator, "Cursor ({s})", .{ @tagName(self.cursor.icon) });
+        defer self.allocator.free(title);
 
-    pub fn toggleCursor(self: *State) Cursor {
-        switch (self.cursor) {
-            .pointer => {
-                self.cursor = .default;
-                return .{ .icon = .default };
-            },
-            .default => {
-                self.cursor = .pointer;
-                return .{ .icon = .pointer };
-            },
-        }
+        _ = try event_loop.createWindow(.{
+            .title = title,
+            .width = 800,
+            .height = 600,
+            .icon = .{ .custom = "examples\\assets\\icon.ico" }
+        });
     }
 
-    pub fn toggleIcon(self: *State) Icon {
-        switch (self.icon) {
-            .security => {
-                self.icon = .default;
-                return .{ .icon = .default };
-            },
-            .default => {
-                self.icon = .security;
-                return .{ .icon = .security };
-            },
-        }
-    }
-
-    pub fn toggleTitle(self: *State) []const u8 {
-        switch (self.title) {
-            .first => {
-                self.title = .second;
-                return "second";
-            },
-            .second => {
-                self.title = .first;
-                return "first";
-            },
-        }
-    }
-
-    pub fn onEvent(self: *@This(), window: *Window, event: Event) void {
-        switch (event) {
+    pub fn handleEvent(self: *@This(), event_loop: *EventLoop, win: *Window, evt: Event) !bool {
+        switch (evt) {
             .close => {
-                window.close();
-            },
-            .key_input => |ke| {
-                switch (ke.key) {
-                    .virtual => |virtual| switch (virtual) {
-                        .escape => if (ke.state == .pressed) window.close(),
-                        .tab => {
-                            window.setIcon(self.toggleIcon()) catch unreachable;
-                            window.setCursor(self.toggleCursor()) catch unreachable;
-                            window.setTitle(self.toggleTitle()) catch unreachable;
-                        },
-                        .down => window.minimize(),
-                        .up => window.restore(),
-                        .right => window.maximize(),
-                        .f1 => std.log.debug("F1", .{}),
-                        else => {},
-                    },
-                    // Exit after pressing the escape key
-                    .char => |char| {
-                        if (ke.state == .pressed) {
-                            std.log.debug("DEV [ {s} ] {s}{s}{s}{s}", .{
-                                if (ke.state == .pressed) "PRESSED" else "RELEASED",
-                                if (ke.modifiers.ctrl) "ctrl+" else "",
-                                if (ke.modifiers.alt) "alt+" else "",
-                                if (ke.modifiers.shift) "shift+" else "",
-                                char,
-                            });
-                        }
-                    },
+                if (core.dialog.message(.yes_no, .{
+                    .icon = .warning,
+                    .title = "Exit",
+                    .message = "Are you sure you want to exit the application?"
+                }) == .yes) {
+                    event_loop.closeWindow(win.id());
                 }
             },
-            .mouse_input => |me| {
-                if (me.state == .pressed and me.button == .left) {
-                    window.setCapture(true);
-                    self.captured = true;
-                } else if (me.state == .released and me.button == .left) {
-                    window.setCapture(false);
-                    self.captured = false;
-                }
-                std.log.debug("Mouse Input: {any}", .{me});
-            },
-            .mouse_move => |me| {
-                if (self.captured) {
-                    // Lock the cursor to the center of the screen
-                    // this is useful for situations like games where
-                    // you capture the mouse and only want the delta of how
-                    // much the mouse moved
-                    const rect = window.getRect();
-                    const x = @divTrunc(rect.width(), 2);
-                    const y = @divTrunc(rect.height(), 2);
+            .key_input => |key_event| {
+                if (key_event.matches(.tab, .{ .shift = false })) {
+                    self.cursor = .{ .icon = @enumFromInt(@as(u8, (@intFromEnum(self.cursor.icon)) +| 1) % 33) };
 
-                    std.log.debug("Delta: (dx: {d}, dy: {d})", .{ me.x - x, me.y - y });
-                    window.setCursorPos(x, y);
-                } else if (self.focused) {
-                    std.log.debug("Position: (x: {d}, y: {d})", .{ me.x, me.y });
+                    const title = try std.fmt.allocPrint(self.allocator, "Cursor ({s})", .{ @tagName(self.cursor.icon) });
+                    defer self.allocator.free(title);
+                    try win.setTitle(title);
+
+                    try win.setCursor(self.cursor);
+                }
+
+                if (key_event.matches(.tab, .{ .shift = true })) {
+                    var new_cursor = @as(i8, @bitCast(@as(u8, (@intFromEnum(self.cursor.icon))))) - 1;
+                    if (new_cursor < 0) {
+                        new_cursor = @as(i8, @bitCast(@as(u8, (@intFromEnum(core.cursor.CursorType.zoom_in))))) + new_cursor + 1;
+                    }
+                    self.cursor = .{ .icon = @enumFromInt(new_cursor) };
+
+                    const title = try std.fmt.allocPrint(self.allocator, "Cursor ({s})", .{ @tagName(self.cursor.icon) });
+                    defer self.allocator.free(title);
+                    try win.setTitle(title);
+
+                    try win.setCursor(self.cursor);
+                }
+
+                if (key_event.matches(.right, .{})) {
+                    const client = win.getRect();
+                    switch (self.pos) {
+                        .tl, .tr => {
+                            win.setCursorPos(client.width -| 1, 0);
+                            self.pos = .tr;
+                        },
+                        .bl, .br => {
+                            win.setCursorPos(client.width -| 1, client.height -| 1);
+                            self.pos = .br;
+                        },
+                    }
+                }
+
+                if (key_event.matches(.left, .{})) {
+                    const client = win.getRect();
+                    switch (self.pos) {
+                        .tl, .tr => {
+                            win.setCursorPos(0, 0);
+                            self.pos = .tl;
+                        },
+                        .bl, .br => {
+                            win.setCursorPos(0, client.height -| 1);
+                            self.pos = .bl;
+                        },
+                    }
+                }
+
+                if (key_event.matches(.up, .{})) {
+                    const client = win.getRect();
+                    switch (self.pos) {
+                        .br, .tr => {
+                            win.setCursorPos(client.width -| 1, 0);
+                            self.pos = .tr;
+                        },
+                        .bl, .tl => {
+                            win.setCursorPos(0, 0);
+                            self.pos = .tl;
+                        },
+                    }
+                }
+
+                if (key_event.matches(.down, .{})) {
+                    const client = win.getRect();
+                    switch (self.pos) {
+                        .br, .tr => {
+                            win.setCursorPos(client.width -| 1, client.height -| 1);
+                            self.pos = .br;
+                        },
+                        .bl, .tl => {
+                            win.setCursorPos(0, client.height -| 1);
+                            self.pos = .bl;
+                        },
+                    }
                 }
             },
-            .mouse_scroll => |scroll| {
-                std.log.debug("Scroll: {any}", .{scroll});
-            },
-            .focused => |focused| {
-                self.focused = focused;
-            },
-            .resize => |re| {
-                if (self.focused) {
-                    std.log.debug("Resize: [width: {d}, height: {d}]", .{ re.width, re.height });
-                }
-            },
-            else => {},
+            else => return false,
         }
+        return true;
     }
 };
 
-// TODO: How to make state optional?
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}).init;
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    var state = State{};
-    var event_loop = EventLoop(State).init(allocator, &state);
+    var app = App{ .allocator = allocator };
+
+    var event_loop = try EventLoop.init(allocator, &app);
     defer event_loop.deinit();
 
-    const win1 = try event_loop.create_window(.{
-        .title = "Zig window 1",
-        .width = 300,
-        .height = 400,
-        .icon = .{ .custom = "examples\\assets\\icon.ico" },
-        .cursor = .{ .icon = .pointer },
-    });
-
-    const win2 = try event_loop.create_window(.{
-        .title = "Zig window 2",
-        .width = 800,
-        .height = 600,
-        .icon = .{ .custom = "examples\\assets\\icon.ico" },
-        .cursor = .{ .icon = .pointer },
-    });
-
     // Custom debug output of window
-    std.debug.print("Press <TAB> to toggle icon, cursor, and title at runtime\n", .{});
-    std.debug.print("\x1b[1;33mWARNING\x1b[39m:\x1b[22m There are a lot of debug log statements \n\n", .{});
-    std.log.debug("{any}", .{win1});
-    std.log.debug("{any}", .{win2});
+    std.debug.print(
+        \\Controls:
+        \\  <tab>: Toggle forwards through cursor icons
+        \\  <shift+tab>: Toggle backwards through cursor icons
+        \\  <left>: Cursor to left corner
+        \\  <right>: Cursor to right corner
+        \\  <up>: Cursor to top corner
+        \\  <down>: Cursor to bottom corner
+        \\
+    , .{});
 
-    event_loop.run();
+    while (event_loop.isActive()) {
+        _ = try event_loop.poll();
+    }
+    // try event_loop.run();
 }

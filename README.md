@@ -18,10 +18,14 @@ Hopefully this library will stay generic enough to be able to be used with most 
 
 **References**
 
-- [GLFW \(C\)](https://www.glfw.org/docs/3.3/window_guide.html)
-- [Winit (Rust)](https://github.com/rust-windowing/winit)
+- GLFW \(C\): https://www.glfw.org/docs/3.3/window_guide.html
+- Winit (Rust): https://github.com/rust-windowing/winit
   - [windows::window](https://github.com/rust-windowing/winit/blob/4cd6877e8e19e7e1ba957a409394dca1af4afcdd/src/platform_impl/windows/window.rs#L432))
-- [CursorOption \(Rust\)](https://docs.rs/cursor-icon/latest/cursor_icon/)
+- CursorOption \(Rust\): https://docs.rs/cursor-icon/latest/cursor_icon/
+- Notifications
+  - Windows
+    - Toast Notification in plain C: https://gist.github.com/valinet/3283c79ba35fc8f103c747c8adbb6b23
+    - Win32 ToastNotificationManager: https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.toastnotificationmanager?view=winrt-26100
 
 
 ## TODO
