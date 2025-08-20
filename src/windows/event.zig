@@ -163,14 +163,15 @@ pub fn parseEvent(win: *Window, args: EventArgs) ?Event {
             keyboard[@intFromEnum(keyboard_and_mouse.VK_RMENU)] = 0;
 
             var buffer: [3:0]u16 = [_:0]u16{0} ** 3;
-            const result = keyboard_and_mouse.ToUnicode(
+            const result = keyboard_and_mouse.ToUnicodeEx(
                 virtual_key,
                 scan_code,
                 &keyboard,
                 &buffer,
                 3,
                 // Set it to not modify keyboard state. Windows 1607 and above
-                0,
+                0b100,
+                keyboard_and_mouse.GetKeyboardLayout(0)
             );
 
             // TODO: If dead key then store for later and combine with next char/key input
@@ -277,7 +278,11 @@ pub fn parseEvent(win: *Window, args: EventArgs) ?Event {
             }
         },
         windows_and_messaging.WM_SIZE => {
+            // If user is currently resizing the window
+            // ignore this event as it is debounced into
+            // a single event
             if (resize != null) return null;
+
             const width = @as(u16, @truncate(@as(usize, @bitCast(lparam))));
             const height = @as(u16, @intCast(lparam >> 16));
             return Event {

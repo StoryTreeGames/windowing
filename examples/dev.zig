@@ -12,6 +12,7 @@ const State = struct {
     allocator: std.mem.Allocator,
     cursor: core.cursor.Cursor = .Default,
     pos: enum { tl, tr, bl, br } = .tl,
+    fullscreen: bool = false,
 
     pub fn handleEvent(self: *@This(), event_loop: *EventLoop, window: *Window, evt: Event) !void {
         switch (evt) {
@@ -21,8 +22,15 @@ const State = struct {
                 }
             },
             .key_input => |key_event| {
+                std.debug.print("{any}\n", .{ key_event.key });
+                if (key_event.matches(.f11, .{})) {
+                    window.setFullScreen(!self.fullscreen);
+                    self.fullscreen = !self.fullscreen;
+                }
+
                 if (key_event.matches('b', .{})) {
                     std.debug.print("[SPACE]: {any}\n", .{input.getKeyDown(' ')});
+                    std.debug.print("[LEFT CLICK]: {any}\n", .{core.cursor.getMouseButton(.left)});
                 }
 
                 if (key_event.matches(.tab, .{ .shift = false })) {

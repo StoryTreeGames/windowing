@@ -12,6 +12,7 @@ pub const GetDeviceCaps = win32.graphics.gdi.GetDeviceCaps;
 pub const HWND = win32.foundation.HWND;
 pub const HINSTANCE = win32.foundation.HINSTANCE;
 pub const RECT = win32.foundation.RECT;
+pub const POINT = win32.foundation.POINT;
 pub const BOOL = win32.foundation.BOOL;
 pub const HRESULT = win32.foundation.HRESULT;
 

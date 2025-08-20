@@ -22,43 +22,183 @@ Hopefully this library will remain generic enough to be able to be used with mos
 
 ## TODO
 
-- [ ] Windows
-  - [x] Queue the events and pop them when polling instead of having them instantly being sent to app handler
-  - [ ] Finish keyboard input to support dead keys
-  - [x] Query key
-  - [ ] Query Mouse
-  - [ ] Add gamepad, controller, joystick input
+- [-] Windows
+  - [x] Basic window creation
+    - [x] Blank Window
+    - [x] Size
+    - [x] Pos
+    - [x] Icon
+    - [x] Cursor
+    - [x] Title
+    - [x] Resizable
+    - [x] Theme
+    - [x] Show (min/max/normal)
+  - [x] Window manipulation
+    - [x] Minimize
+    - [x] Maxamize
+    - [x] Restore 
+    - [x] Update Title
+    - [x] Update Icon
+    - [x] Update Cursor
+    - [x] Show/Hide Cursor
+    - [x] Set Cursor Pos
+    - [x] Change Window Theme
+    - [x] Set Cursor Capture
+    - [x] Set and Update Menu
+    - [x] Fullscreen
+  - [-] Event listening and handling
+    - [x] Close 
+    - [-] Keyboard
+      - [ ] Finish keyboard input to support dead keys
+    - [x] Mouse
+    - [x] Resize
+    - [x] Menu
+    - [x] Repaint
+    - [x] Theme Change
+    - [ ] Drag Drop Files
+  - [-] Query
+    - [x] Keys
+    - [x] Mouse
+    - [ ] Gamepad, controller, joystick, etc.
   - [ ] Audio
+  - [x] Notification
   - [ ] System Tray
+  - [ ] Custom Context Menu
+  - [x] Menu
+  - [ ] App ID and Start Menu for things like systray and notifications
+    - Can already assign App ID to the current process
   - [ ] Owner Drawn menu bar for system theme colors?
     - This can be difficult and error prone. Plain white background with black text should work for now.
 
 - [ ] Wayland
   - [ ] Basic window creation
+    - [ ] Blank Window
+    - [ ] Size
+    - [ ] Pos
+    - [ ] Icon
+    - [ ] Cursor
+    - [ ] Title
+    - [ ] Resizable
+    - [ ] Theme
+    - [ ] Show (min/max/normal)
+  - [ ] Window manipulation
+    - [ ] Minimize
+    - [ ] Maxamize
+    - [ ] Restore 
+    - [ ] Update Title
+    - [ ] Update Icon
+    - [ ] Update Cursor
+    - [ ] Show/Hide Cursor
+    - [ ] Set Cursor Pos
+    - [ ] Change Window Theme
+    - [ ] Set Cursor Capture
+    - [ ] Set and Update Menu
+    - [ ] Fullscreen
   - [ ] Event listening and handling
-  - [ ] Query keys and input state
+    - [ ] Close 
+    - [ ] Keyboard
+    - [ ] Mouse
+    - [ ] Resize
+    - [ ] Menu 
+    - [ ] Repaint
+    - [ ] Theme Change
+    - [ ] Drag Drop Files
+  - [ ] Query
+    - [ ] Keys
+    - [ ] Mouse
+    - [ ] Gamepad, controller, joystick, etc.
   - [ ] Audio
   - [ ] Notifications
   - [ ] System Tray
-  - [ ] Title Bar + Menu
+  - [ ] Custom Context Menu
+  - [ ] Title Bar
+  - [ ] Menu
 
 - [ ] X11
   - [ ] Basic window creation
+    - [ ] Size
+    - [ ] Pos
+    - [ ] Icon
+    - [ ] Cursor
+    - [ ] Title
+    - [ ] Resizable
+    - [ ] Theme
+    - [ ] Show (min/max/normal)
+  - [ ] Window manipulation
+    - [ ] Minimize
+    - [ ] Maxamize
+    - [ ] Restore 
+    - [ ] Update Title
+    - [ ] Update Icon
+    - [ ] Update Cursor
+    - [ ] Show/Hide Cursor
+    - [ ] Set Cursor Pos
+    - [ ] Change Window Theme
+    - [ ] Set Cursor Capture
+    - [ ] Set and Update Menu
+    - [ ] Fullscreen
   - [ ] Event listening and handling
-  - [ ] Query keys and input state
+    - [ ] Close 
+    - [ ] Keyboard
+    - [ ] Mouse
+    - [ ] Resize
+    - [ ] Menu 
+    - [ ] Repaint
+    - [ ] Theme Change
+    - [ ] Drag Drop Files
+  - [ ] Query
+    - [ ] Keys
+    - [ ] Mouse
+    - [ ] Gamepad, controller, joystick, etc.
   - [ ] Audio
   - [ ] Notifications
   - [ ] System Tray
-  - [ ] Title Bar + Menu
+  - [ ] Custom Context Menu
+  - [ ] Title Bar
+  - [ ] Menu
 
 - [ ] MacOS
   - [ ] Basic window creation
+    - [ ] Size
+    - [ ] Pos
+    - [ ] Icon
+    - [ ] Cursor
+    - [ ] Title
+    - [ ] Resizable
+    - [ ] Theme
+    - [ ] Show (min/max/normal)
+  - [ ] Window manipulation
+    - [ ] Minimize
+    - [ ] Maxamize
+    - [ ] Restore 
+    - [ ] Update Title
+    - [ ] Update Icon
+    - [ ] Update Cursor
+    - [ ] Show/Hide Cursor
+    - [ ] Set Cursor Pos
+    - [ ] Change Window Theme
+    - [ ] Set Cursor Capture
+    - [ ] Set and Update Menu
+    - [ ] Fullscreen
   - [ ] Event listening and handling
-  - [ ] Query keys and input state
+    - [ ] Close 
+    - [ ] Keyboard
+    - [ ] Mouse
+    - [ ] Resize
+    - [ ] Menu 
+    - [ ] Repaint
+    - [ ] Theme Change
+    - [ ] Drag Drop Files
+  - [ ] Query
+    - [ ] Keys
+    - [ ] Mouse
+    - [ ] Gamepad, controller, joystick, etc.
   - [ ] Audio
   - [ ] Notifications
   - [ ] System Tray
-  - [ ] Title Bar + Menu
+  - [ ] Custom Context Menu
+  - [ ] Title Bar
+  - [ ] Menu
 
 ## References
 

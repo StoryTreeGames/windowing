@@ -70,10 +70,6 @@ pub const MessageOptions = struct {
     icon: ?Icon = null,
 };
 
-pub fn message(buttons: ?Buttons, opts: MessageOptions) ?Button {
-    return impl.message(buttons, opts);
-}
-
 pub const FileOpenDialogOptions = struct {
     /// The HWND of the window that the dialog will be owned by. If not provided the dialog will be
     /// an independent top-level window.
@@ -99,10 +95,6 @@ pub const FileOpenDialogOptions = struct {
     exists: bool = true,
 };
 
-/// Caller is responsible for freeing the returned array of selected paths
-pub fn open(allocator: std.mem.Allocator, opts: FileOpenDialogOptions) !?[]const []const u8 {
-    return impl.open(allocator, opts);
-}
 
 pub const FileSaveDialogOptions = struct {
     /// The HWND of the window that the dialog will be owned by. If not provided the dialog will be
@@ -125,19 +117,11 @@ pub const FileSaveDialogOptions = struct {
     prompt_on_create: bool = false,
 };
 
-pub fn save(allocator: std.mem.Allocator, opts: FileSaveDialogOptions) !?[]const u8 {
-    return impl.save(allocator, opts);
-}
-
 pub const ColorOptions = struct {
     owner: ?*anyopaque = null,
     initial: Color = .{ .red = 200, .green = 100, .blue = 100 },
     custom: ?*[16]Color = null,
 };
-
-pub fn color(options: ColorOptions) !?Color {
-    return impl.color(options);
-}
 
 pub const FontOptions = struct {
     owner: ?*anyopaque = null,
@@ -147,7 +131,10 @@ pub const FontOptions = struct {
     point_size: i16 = 12,
 };
 
+pub const message = impl.message;
+/// Caller is responsible for freeing the returned array of selected paths
+pub const open = impl.open;
+pub const save = impl.save;
+pub const color = impl.color;
 /// Caller is responsible for freeing the returned `Font.name`
-pub fn font(allocator: std.mem.Allocator, options: FontOptions) !?Font {
-    return impl.font(allocator, options);
-}
+pub const font = impl.font;

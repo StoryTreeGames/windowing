@@ -1,7 +1,11 @@
 const wam = @import("win32").ui.windows_and_messaging;
+const kam = @import("win32").ui.input.keyboard_and_mouse;
 const zig = @import("win32").zig;
 const CursorType = @import("../cursor.zig").CursorType;
 const Rect = @import("../root.zig").Rect;
+const Point = @import("../root.zig").Point;
+const util = @import("util.zig");
+const input = @import("../input.zig");
 
 pub fn cursorToResource(cursor: CursorType) [*:0]align(1) const u16 {
     return switch (cursor) {
@@ -57,4 +61,27 @@ pub fn clipCursor(bounds: ?Rect(u32)) void {
         .right = @bitCast(b.x + b.width),
         .bottom = @bitCast(b.y + b.height),
     } else null);
+}
+
+/// Get the cursor position in screen coordinates
+pub fn getCursorPos() Point(u32) {
+    var point: util.POINT = undefined;
+    _ = wam.GetCursorPos(&point);
+    return .{
+        .x = @bitCast(point.x),
+        .y = @bitCast(point.y),
+    };
+}
+
+/// Get whether the mouse button is down
+pub fn getKeyState(mouse_button: input.MouseButton) bool {
+    const value = switch(mouse_button) {
+        .left => kam.VK_LBUTTON,
+        .right => kam.VK_RBUTTON,
+        .middle => kam.VK_MBUTTON,
+        .x1 => kam.VK_XBUTTON1,
+        .x2 => kam.VK_XBUTTON2,
+    };
+
+    return (@as(u16, @bitCast(kam.GetAsyncKeyState(@intFromEnum(value)))) & 0x8000) != 0;
 }

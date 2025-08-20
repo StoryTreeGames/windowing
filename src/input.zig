@@ -273,23 +273,20 @@ pub const VirtualKey = enum(u32) {
 
 pub const MouseButton = enum(u32) {
     /// The left mouse button.
-    left = 0x0001,
+    left,
     /// The middle mouse button.
-    middle = 0x0010,
+    middle,
     /// The right mouse button.
-    right = 0x0002,
+    right,
     /// The first X button.
-    x1 = 0x0020,
+    x1,
     /// The second X button.
-    x2 = 0x0040,
+    x2,
 };
 
 
 /// Get whether the key is down
-pub fn getKeyDown(key: anytype) bool {
-    return impl.getKeyState(key);
-}
-
+pub const getKeyDown = impl.getKeyState;
 /// Get whether the key is up
 pub fn getKeyUp(key: anytype) bool {
     return !impl.getKeyState(key);

@@ -223,16 +223,4 @@ const Impl = switch(@import("builtin").os.tag) {
     else => @compileError("unsupported platform")
 };
 
-pub const Notification = struct {
-    impl: Impl,
-
-    pub fn send(alloc: std.mem.Allocator, app_id: ?[]const u8, tag: []const u8, config: Config) !@This() {
-        return .{
-            .impl = try Impl.send(alloc, app_id, tag, config),
-        };
-    }
-
-    pub fn update(self: *const @This(), alloc: std.mem.Allocator, config: Update) !void {
-        try self.impl.update(alloc, config);
-    }
-};
+pub const Notification = Impl.Notification;

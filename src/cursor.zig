@@ -89,3 +89,5 @@ const impl = switch(@import("builtin").os.tag) {
 
 pub const showCursor = impl.showCursor;
 pub const clipCursor = impl.clipCursor;
+pub const getCursorPos = impl.getCursorPos;
+pub const getMouseButton = impl.getKeyState;

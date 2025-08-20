@@ -89,6 +89,17 @@ pub fn getCurrentTheme(self: *@This()) Theme {
     return self.impl.getCurrentTheme();
 }
 
+/// Set or Unset the current window to be full screen.
+///
+/// + **true**: It will take up the entire screen of the current monitor where
+///   the window is located if it is fullscreen.
+/// + **false**: The window's styles, size, and position are restored and if
+///   the window was maximized before fullscreen, it will go back to being
+///   maximized.
+pub fn setFullScreen(self: *@This(), state: bool) void {
+    try self.impl.setFullScreen(state);
+}
+
 /// Set window title
 pub fn setTitle(self: *@This(), title: []const u8) !void {
     try self.impl.setTitle(self.arena.allocator(), title);
@@ -114,6 +125,10 @@ pub fn getCapture(self: *@This()) bool {
     self.impl.getCapture();
 }
 
+/// Get the current bounds of the window
+pub fn getWindowRect(self: *@This()) Rect(u32) {
+    return self.impl.getWindowRect();
+}
 
 /// Get the current area that is used for rendering
 pub fn getClientRect(self: *@This()) Rect(u32) {
