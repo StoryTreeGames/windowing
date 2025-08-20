@@ -42,12 +42,9 @@ pub fn main() !void {
 
     log.info("creating window", .{});
     const win = try event_loop.createWindow(.{
-        .title = "wgpu-native-zig windows example",
+        .title = "wgpu-native-zig window example",
         .width = 640,
         .height = 480,
-        .resizable = true,
-        .icon = .{ .custom = "examples\\assets\\icon.ico" },
-        // .cursor = .{ .icon = .pointer },
     });
 
     var app = App{ .renderer = try Renderer.create(win) };

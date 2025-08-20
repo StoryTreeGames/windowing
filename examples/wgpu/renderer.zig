@@ -158,7 +158,7 @@ pub fn render(self: *Renderer) !void {
     const render_pass_color_attachments = &[_]wgpu.ColorAttachment {
         wgpu.ColorAttachment {
             .view = target_view,
-            .clear_value = wgpu.Color { .r = 0.9, .g = 0.1, .b = 0.2, .a = 0.0 },
+            .clear_value = wgpu.Color { .r = 0.62, .g = 0.83, .b = 0.64, .a = 0.0 },
         },
     };
 

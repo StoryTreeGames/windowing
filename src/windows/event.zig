@@ -261,20 +261,31 @@ pub fn parseEvent(win: *Window, args: EventArgs) ?Event {
         // Check for focus and unfocus
         windows_and_messaging.WM_SETFOCUS => return Event{ .focused = true },
         windows_and_messaging.WM_KILLFOCUS => return Event{ .focused = false },
+        windows_and_messaging.WM_SIZING => {
+            const area: *util.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+            resize = area.*;
+        },
         windows_and_messaging.WM_EXITSIZEMOVE => {
             defer resize = null;
-            if (resize) |rect| {
+            if (resize) |dim| {
                 return Event{
                     .resize = .{
-                        .width = @bitCast(rect.right - rect.left),
-                        .height = @bitCast(rect.bottom - rect.top),
+                        .width = @bitCast(dim.right - dim.left),
+                        .height = @bitCast(dim.bottom - dim.top),
                     },
                 };
             }
         },
-        windows_and_messaging.WM_SIZING => {
-            const size: *util.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            resize = size.*;
+        windows_and_messaging.WM_SIZE => {
+            if (resize != null) return null;
+            const width = @as(u16, @truncate(@as(usize, @bitCast(lparam))));
+            const height = @as(u16, @intCast(lparam >> 16));
+            return Event {
+                .resize = .{
+                    .width = width,
+                    .height = height,
+                },
+            };
         },
         else => return null,
     }
