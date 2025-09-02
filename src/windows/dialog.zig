@@ -1,6 +1,3 @@
-// TODO: Update whole file to use win32.ui.shell, win32.ui.shell.common,
-//        win32.ui.controls.dialogs, and win32.ui.windows_and_messaging
-
 const std = @import("std");
 const builtin = @import("builtin");
 

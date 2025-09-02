@@ -3,648 +3,204 @@
 const std = @import("std");
 const process = std.process;
 
+const windows = @import("windows");
+const win32 = windows.win32;
+
+const XmlDocument = windows.Data.Xml.Dom.XmlDocument;
+const XmlElement = windows.Data.Xml.Dom.XmlElement;
+const IXmlNode = windows.Data.Xml.Dom.IXmlNode;
+const IInspectable = windows.Foundation.IInspectable;
+const HSTRING = windows.HSTRING;
+const IUnknown = windows.IUnknown;
+
+const ToastNotificationManager = windows.UI.Notifications.ToastNotificationManager;
+const ToastNotification = windows.UI.Notifications.ToastNotification;
+const NotificationData = windows.UI.Notifications.NotificationData;
+
+const TypedEventHandler = windows.Foundation.TypedEventHandler;
+const ToastDismissedEventArgs = windows.UI.Notifications.ToastDismissedEventArgs;
+const ToastActivatedEventArgs = windows.UI.Notifications.ToastActivatedEventArgs;
+const ToastFailedEventArgs = windows.UI.Notifications.ToastFailedEventArgs;
+const IMap = windows.Foundation.Collections.IMap;
+
 const notif = @import("../notification.zig");
 const Config = notif.Config;
 const Update = notif.Update;
 const Action = notif.Action;
 const Audio = notif.Audio;
 
-const Dictionary = struct {
-    buffer: *std.io.Writer,
+const L = std.unicode.utf8ToUtf16LeStringLiteral;
 
-    pub fn init(buffer: *std.io.Writer) !@This() {
-        try buffer.writeAll("$Dictionary = [System.Collections.Generic.Dictionary[String, String]]::New();\n");
-        return .{
-            .buffer = buffer,
-        };
+pub fn WindowsCreateString(string: [:0]const u16) !?HSTRING {
+    var result: ?HSTRING = undefined;
+    if (win32.system.win_rt.WindowsCreateString(string.ptr, @intCast(string.len), &result) != 0) {
+        return error.E_OUTOFMEMORY;
+    }
+    return result;
+}
+
+pub fn WindowsDeleteString(string: ?HSTRING) void {
+    _ = win32.system.win_rt.WindowsDeleteString(string);
+}
+
+pub fn WindowsGetString(string: ?HSTRING) ?[]const u16 {
+    var len: u32 = 0;
+    const buffer = win32.system.win_rt.WindowsGetStringRawBuffer(string, &len);
+    if (buffer) |buf| {
+        return buf[0..@as(usize, @intCast(len))];
+    }
+    return null;
+}
+
+pub fn addAttribute(xmlElement: *XmlElement, key: [:0]const u16, value: [:0]const u16) !void {
+    const aname = try WindowsCreateString(key);
+    defer WindowsDeleteString(aname);
+
+    const avalue = try WindowsCreateString(value);
+    defer WindowsDeleteString(avalue);
+
+    try xmlElement.SetAttribute(aname.?, avalue.?);
+}
+
+pub fn addText(allocator: std.mem.Allocator, doc: *XmlDocument, parent: *XmlElement, content: []const u8, id: usize, hint_title: bool) !void {
+    const text_tag = try WindowsCreateString(L("text"));
+    defer WindowsDeleteString(text_tag);
+
+    const textElement = try doc.CreateElement(text_tag.?);
+    defer _ = IUnknown.Release(@ptrCast(textElement));
+    _ = try parent.AppendChild(@ptrCast(textElement));
+
+    const id_str = try std.fmt.allocPrint(allocator, "{d}", .{ id });
+    defer allocator.free(id_str);
+
+    const wide_id = try std.unicode.utf8ToUtf16LeAllocZ(allocator, id_str);
+    defer allocator.free(wide_id);
+
+    try addAttribute(textElement, L("id"), wide_id[0..wide_id.len:0]);
+    if (hint_title) {
+        try addAttribute(textElement, L("hint-style"), L("title"));
     }
 
-    pub fn add(self: *@This(), name: []const u8, value: anytype) !void {
-        const fmt = switch (@TypeOf(value)) {
-            f32, comptime_float => "{d}",
-            else => "{s}",
-        };
+    const wide_content = try std.unicode.utf8ToUtf16LeAllocZ(allocator, content);
+    defer allocator.free(wide_content);
 
-        try self.buffer.print("$Dictionary.Add('{s}', '" ++ fmt ++ "');\n", .{ name, value });
-    }
-};
+    const title_text = try WindowsCreateString(wide_content[0..wide_content.len:0]);
+    defer WindowsDeleteString(title_text);
 
-const Notifier = struct {
-    buffer: *std.io.Writer,
+    const text = try doc.CreateTextNode(title_text.?);
+    defer _ = IUnknown.Release(@ptrCast(text));
+    _ = try textElement.AppendChild(@ptrCast(text));
+}
 
-    pub fn init(buffer: *std.io.Writer, app_id: []const u8) !@This() {
-        try buffer.print("$AppId = '{s}';\n", .{app_id});
+pub fn insertData(allocator: std.mem.Allocator, data: *IMap(HSTRING, HSTRING), key: [:0]const u16, value: []const u8) !void {
+    const aname = try WindowsCreateString(key);
+    defer WindowsDeleteString(aname);
 
-        try buffer.writeAll(
-            "$Notifier = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]::CreateToastNotifier($AppId);\n",
-        );
-        return .{
-            .buffer = buffer,
-        };
-    }
+    const wide_value = try std.unicode.utf8ToUtf16LeAllocZ(allocator, value);
+    defer allocator.free(wide_value);
 
-    pub fn show(self: *@This(), dictionary: Dictionary, sequence: u8, toast_notification: ToastNotification) !void {
-        _ = dictionary;
-        _ = toast_notification;
+    const avalue = try WindowsCreateString(wide_value[0..wide_value.len:0]);
+    defer WindowsDeleteString(avalue);
 
-        try self.buffer.writeAll("$ToastNotification.Data = [Windows.UI.Notifications.NotificationData]::New($Dictionary);\n");
-        try self.buffer.print("$ToastNotification.Data.SequenceNumber = {d};\n", .{sequence});
-        try self.buffer.writeAll("$Notifier.Show($ToastNotification);\n");
-    }
+    _ = try data.Insert(aname.?, avalue.?);
+}
 
-    pub fn update(self: *@This(), dictionary: Dictionary, sequence: u8, tag: []const u8) !void {
-        _ = dictionary;
-
-        try self.buffer.writeAll("$NotificationData = [Windows.UI.Notifications.NotificationData]::New($Dictionary);\n");
-        try self.buffer.print("$NotificationData.SequenceNumber = {d};\n", .{sequence});
-        try self.buffer.print("$Notifier.Update($NotificationData, '{s}');\n", .{tag});
-    }
-};
-
-const XmlToastTag = union(enum) {
-    close: void,
-    attrs: Attrs,
-
-    pub fn open(attrs: Attrs) @This() {
-        return .{ .attrs = attrs };
-    }
-
-    pub const Attrs = struct {
-        duration: ?enum { long, short } = null,
-        scenario: ?enum { reminder, alarm, incoming_call, urgent } = null,
-        /// Arguments passed to the application when it is activated by the toast.
-        launch: ?[]const u8 = null,
-        /// ISO 8601 standard timestamp
-        displayTimestamp: ?[]const u8 = null,
-        /// Whether to use styled buttons
-        useButtonStyle: ?bool = null,
-    };
-};
-
-const XmlImageAttrs = struct {
-    /// + http://
-    /// + https://
-    /// + ms-appx://
-    /// + ms-appdata:///local/
-    /// + file:///
-    src: []const u8,
-    alt: ?[]const u8 = null,
-    placement: ?enum {
-        /// Very top of toast spaning the full width
-        hero,
-        /// Replaces app logo in toast
-        app_logo_override,
-    } = null,
-    /// Crop the image
-    hint_crop: ?enum { circle } = null,
-};
-
-const XmlBindingTag = union(enum) {
-    close: void,
-    template: []const u8,
-
-    pub fn open(value: []const u8) @This() {
-        return .{ .template = value };
-    }
-};
-
-const Xml = struct {
-    buffer: *std.io.Writer,
-    id: usize = 1,
-
-    pub fn init(buffer: *std.io.Writer) !@This() {
-        try buffer.writeAll("$xml = '\n");
-
-        return .{
-            .buffer = buffer,
-        };
-    }
-
-    pub fn actions(self: *@This(), state: enum { open, close }) !void {
-        switch (state) {
-            .open => try self.buffer.writeAll("  <actions>\n"),
-            .close => try self.buffer.writeAll("  </actions>\n"),
-        }
-    }
-
-    pub fn visual(self: *@This(), state: enum { open, close }) !void {
-        switch (state) {
-            .open => try self.buffer.writeAll("  <visual>\n"),
-            .close => try self.buffer.writeAll("  </visual>\n"),
-        }
-    }
-
-    pub fn image(self: *@This(), attrs: XmlImageAttrs) !void {
-        self.id += 1;
-
-        try self.buffer.print("      <image id=\"{d}\"", .{self.id});
-        try self.buffer.writeAll("\n        src=\"");
-        try self.buffer.writeAll(attrs.src);
-        try self.buffer.writeAll("\"");
-
-        if (attrs.alt) |alt| {
-            try self.buffer.writeAll("\n        alt=\"");
-            try self.buffer.writeAll(alt);
-            try self.buffer.writeAll("\"");
-        }
-        if (attrs.placement) |duration| {
-            try self.buffer.writeAll("\n        placement=\"");
-            switch (duration) {
-                .hero => try self.buffer.writeAll("hero"),
-                .app_logo_override => try self.buffer.writeAll("appLogoOverride"),
-            }
-            try self.buffer.writeAll("\"");
-        }
-        if (attrs.hint_crop) |crop| {
-            try self.buffer.writeAll("\n        hint-crop=\"");
-            switch (crop) {
-                .circle => try self.buffer.writeAll("circle"),
-            }
-            try self.buffer.writeAll("\"");
-        }
-        try self.buffer.writeAll("/>\n");
-    }
-
-    pub fn action(self: *@This(), a: Action) !void {
-        switch (a) {
-            .input => |attrs| {
-                try self.buffer.writeAll("    <input type=\"text\" id=\"");
-                try self.buffer.writeAll(attrs.id);
-                try self.buffer.writeByte('"');
-
-                if (attrs.place_holder_content) |placeholder| {
-                    try self.buffer.writeAll(" placeHolderContent=\"");
-                    try self.buffer.writeAll(placeholder);
-                    try self.buffer.writeByte('"');
-                }
-
-                if (attrs.title) |title| {
-                    try self.buffer.writeAll(" title=\"");
-                    try self.buffer.writeAll(title);
-                    try self.buffer.writeByte('"');
-                }
-
-                try self.buffer.writeAll("/>");
-            },
-            .select => |config| {
-                try self.buffer.writeAll("    <input type=\"selection\" id=\"");
-                try self.buffer.writeAll(config.id);
-                try self.buffer.writeByte('"');
-
-                if (config.title) |title| {
-                    try self.buffer.writeAll(" title=\"");
-                    try self.buffer.writeAll(title);
-                    try self.buffer.writeByte('"');
-                }
-                try self.buffer.writeAll(">\n");
-
-                for (config.items) |item| {
-                    try self.buffer.writeAll("      <selection id=\"");
-                    try self.buffer.writeAll(item.id);
-                    try self.buffer.writeAll("\" content=\"");
-                    try self.buffer.writeAll(item.content);
-                    try self.buffer.writeAll("\"/>\n");
-                }
-                try self.buffer.writeAll("    </input>\n");
-            },
-            .button => |attrs| {
-                try self.buffer.writeAll(
-                    \\    <action
-                    \\      content="
-                );
-                try self.buffer.writeAll(attrs.content);
-                try self.buffer.writeAll(
-                    \\"
-                    \\      arguments="
-                );
-                try self.buffer.writeAll(attrs.arguments);
-                try self.buffer.writeByte('"');
-
-                if (attrs.activation_type) |atype| {
-                    switch (atype) {
-                        .foreground => try self.buffer.writeAll("\n      activationType=\"foreground\""),
-                        .background => try self.buffer.writeAll("\n      activationType=\"background\""),
-                        .protocol => try self.buffer.writeAll("\n      activationType=\"protocol\""),
-                    }
-                }
-                if (attrs.after_activation_behavior) |behavior| {
-                    switch (behavior) {
-                        .default => try self.buffer.writeAll("\n      afterActivationBehavior=\"default\""),
-                        .pending_update => try self.buffer.writeAll("\n      afterActivationBehavior=\"pendingUpdate\""),
-                    }
-                }
-                if (attrs.placement) |placement| {
-                    switch (placement) {
-                        .context_menu => try self.buffer.writeAll("\n      placement=\"contextMenu\""),
-                    }
-                }
-                if (attrs.hint_button_style) |button_style| {
-                    switch (button_style) {
-                        .success => try self.buffer.writeAll("\n      hint-buttonStyle=\"Success\""),
-                        .critical => try self.buffer.writeAll("\n      hint-buttonStyle=\"Critical\""),
-                    }
-                }
-                if (attrs.image_uri) |uri| {
-                    try self.buffer.writeAll("\n      imageUri=\"");
-                    try self.buffer.writeAll(uri);
-                    try self.buffer.writeByte('"');
-                }
-                if (attrs.hint_input_id) |id| {
-                    try self.buffer.writeAll("\n      hint-inputId=\"");
-                    try self.buffer.writeAll(id);
-                    try self.buffer.writeByte('"');
-                }
-                if (attrs.hint_tool_tip) |tip| {
-                    try self.buffer.writeAll("\n      hint-toolTip=\"");
-                    try self.buffer.writeAll(tip);
-                    try self.buffer.writeByte('"');
-                }
-                try self.buffer.writeAll("/>\n");
-            },
-        }
-    }
-
-    pub fn binding(self: *@This(), state: XmlBindingTag) !void {
-        switch (state) {
-            .template => |value| {
-                try self.buffer.print("    <binding template=\"{s}\">\n", .{value});
-            },
-            .close => try self.buffer.writeAll("    </binding>\n"),
-        }
-    }
-
-    pub fn toast(self: *@This(), state: XmlToastTag) !void {
-        switch (state) {
-            .close => try self.buffer.writeAll("      </toast>\n';\n"),
-            .attrs => |attrs| {
-                try self.buffer.writeAll("      <toast");
-                if (attrs.scenario) |scenario| {
-                    switch (scenario) {
-                        .reminder => try self.buffer.writeAll(" scenario=\"reminder\""),
-                        .alarm => try self.buffer.writeAll(" scenario=\"alarm\""),
-                        .incoming_call,
-                        => try self.buffer.writeAll(" scenario=\"incomingCall\""),
-                        .urgent => try self.buffer.writeAll(" scenario=\"urgent\""),
-                    }
-                }
-                if (attrs.duration) |duration| {
-                    switch (duration) {
-                        .long => try self.buffer.writeAll(" duration=\"long\""),
-                        .short => try self.buffer.writeAll(" duration=\"short\""),
-                    }
-                }
-                if (attrs.displayTimestamp) |timestamp| {
-                    try self.buffer.print(" displayTimestamp=\"{s}\"", .{timestamp});
-                }
-                if (attrs.launch) |launch| {
-                    try self.buffer.print(" launch=\"{s}\"", .{launch});
-                }
-                if (attrs.useButtonStyle orelse false) {
-                    try self.buffer.writeAll(" useButtonStyle=\"true\"");
-                } else {
-                    try self.buffer.writeAll(" useButtonStyle=\"false\"");
-                }
-                try self.buffer.writeAll(">\n");
-            },
-        }
-    }
-
-    pub fn text(self: *@This(), content: []const u8, hint_style: ?[]const u8) !void {
-        self.id += 1;
-
-        try self.buffer.print("      <text id=\"{d}\"", .{self.id});
-
-        if (hint_style) |style| {
-            try self.buffer.writeAll(" hint-style=\"");
-            try self.buffer.writeAll(style);
-            try self.buffer.writeAll("\"");
-        }
-
-        try self.buffer.print(">{s}</text>\n", .{content});
-    }
-
-    pub fn audio(self: *@This(), sound: Audio, loop: ?bool) !void {
-        try self.buffer.writeAll("      <audio");
-        switch (sound) {
-            .silent, .custom_uri => try self.buffer.writeAll(" silent=\"true\"/>\n"),
-            else => {
-                try self.buffer.writeAll(" src=\"");
-                try self.buffer.writeAll(sound.source());
-                try self.buffer.writeAll("\"");
-                if (loop orelse false) {
-                    try self.buffer.writeAll(" loop=\"true\"");
-                } else {
-                    try self.buffer.writeAll(" loop=\"false\"");
-                }
-                try self.buffer.writeAll("/>\n");
-            },
-        }
-    }
-
-    pub fn progress(self: *@This(), title: bool, override: bool) !void {
-        try self.buffer.writeAll("      <progress\n");
-        if (title) {
-            try self.buffer.writeAll("        title=\"{progressTitle}\"\n");
-        }
-        if (override) {
-            try self.buffer.writeAll("        valueStringOverride=\"{progressValueString}\"\n");
-        }
-
-        try self.buffer.writeAll(
-            \\        value="{progressValue}"
-            \\        status="{progressStatus}"/>
-            \\
-        );
-    }
-
-    pub fn close(self: *@This()) !void {
-        try self.buffer.writeAll(
-            \\    </binding>
-            \\  </visual>
-            \\</toast>
-            \\';
-            \\
-        );
-    }
-};
-
-const MediaPlayer = struct {
-    buffer: *std.io.Writer,
-
-    pub fn init(buffer: *std.io.Writer) !@This() {
-        try buffer.writeAll(
-            \\$PLAYSOUND = @'
-            \\$MediaPlayer = [Windows.Media.Playback.MediaPlayer, Windows.Media, ContentType = WindowsRuntime]::New();
-            \\
-        );
-
-        return .{
-            .buffer = buffer,
-        };
-    }
-
-    pub fn createFromUri(self: *@This(), uri: []const u8) !void {
-        try self.buffer.writeAll("$MediaSource = [Windows.Media.Core.MediaSource]::CreateFromUri(\\\"");
-        try self.buffer.writeAll(uri);
-        try self.buffer.writeAll(
-            \\\");
-            \\$MediaSource.OpenAsync() | Out-Null
-            \\while ($MediaSource.State -eq \"Opening\" -or $MediaSource.State -eq \"Initial\") { Start-Sleep -Milliseconds 50 }
-            \\$MediaPlayer.Source = $MediaSource
-            \\
-        );
-    }
-
-    pub fn play(self: *@This()) !void {
-        try self.buffer.writeAll(
-            \\$MediaPlayer.Play();
-            \\Start-Sleep -Seconds $MediaPlayer.NaturalDuration.TotalSeconds
-            \\'@;
-            \\Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList "-NoProfile", "-Command", $PLAYSOUND
-            \\
-        );
-    }
-};
-
-const XmlDocument = struct {
-    buffer: *std.io.Writer,
-
-    pub fn init(buffer: *std.io.Writer) !@This() {
-        try buffer.writeAll("$XmlDocument = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]::New();\n");
-        return .{
-            .buffer = buffer,
-        };
-    }
-
-    pub fn loadXml(self: *@This(), xml: Xml) !void {
-        _ = xml;
-        try self.buffer.writeAll("$XmlDocument.loadXml($xml);\n");
-    }
-};
-
-const ToastNotification = struct {
-    pub fn init(buffer: *std.io.Writer, xml_document: XmlDocument, tag: []const u8) !@This() {
-        _ = xml_document;
-
-        try buffer.writeAll(
-            \\$ToastNotification = [Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType = WindowsRuntime]::New($XmlDocument);
-            \\
-        );
-
-        try buffer.print("$ToastNotification.Tag = '{s}';\n", .{tag});
-        return .{};
-    }
-};
-
-const Script = struct {
-    allocator: std.mem.Allocator,
-    buffer: std.io.Writer.Allocating,
-
-    pub fn init(allocator: std.mem.Allocator) @This() {
-        return .{
-            .allocator = allocator,
-            .buffer = .init(allocator),
-        };
-    }
-
-    pub fn deinit(self: *@This()) void {
-        self.buffer.deinit();
-    }
-
-    pub fn execute(self: *@This()) !void {
-        const data = try self.buffer.toOwnedSlice();
-        defer self.allocator.free(data);
-
-        const result = try process.Child.run(.{
-            .allocator = self.allocator,
-            .argv = &.{
-                "powershell",
-                "-c",
-                data,
-            },
-        });
-        self.allocator.free(result.stdout);
-        self.allocator.free(result.stderr);
-    }
-
-    pub fn startCommand(self: *@This()) !void {
-        try self.buffer.writer.writeAll("Invoke-Command -ScriptBlock {\n");
-    }
-
-    pub fn endCommand(self: *@This()) !void {
-        try self.buffer.writer.writeByte('}');
-    }
-
-    pub fn xml(self: *@This()) !Xml {
-        return try Xml.init(&self.buffer.writer);
-    }
-
-    pub fn dictionary(self: *@This()) !Dictionary {
-        return try Dictionary.init(&self.buffer.writer);
-    }
-
-    pub fn xml_document(self: *@This()) !XmlDocument {
-        return try XmlDocument.init(&self.buffer.writer);
-    }
-
-    pub fn toast_notification(self: *@This(), document: XmlDocument, tag: []const u8) !ToastNotification {
-        return try ToastNotification.init(&self.buffer.writer, document, tag);
-    }
-
-    pub fn notifier(self: *@This(), app_id: []const u8) !Notifier {
-        return try Notifier.init(&self.buffer.writer, app_id);
-    }
-
-    pub fn media_player(self: *@This()) !MediaPlayer {
-        return try MediaPlayer.init(&self.buffer.writer);
-    }
-};
+const powershell_app_id: []const u8 = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe";
 
 pub const Notification = struct {
     config: Config,
     tag: []const u8,
     app_id: []const u8,
 
-    pub fn send(alloc: std.mem.Allocator, app_id: ?[]const u8, tag: []const u8, config: Config) !@This() {
-        var script = Script.init(alloc);
-        defer script.deinit();
+    pub fn send(allocator: std.mem.Allocator, app_id: ?[]const u8, tag: []const u8, config: Config) !@This() {
+        const aid = try std.unicode.utf8ToUtf16LeAllocZ(allocator, if (app_id)|id| id else powershell_app_id);
+        defer allocator.free(aid);
 
-        try script.startCommand();
+        const APP_ID = try WindowsCreateString(aid[0..aid.len:0]);
+        defer WindowsDeleteString(APP_ID);
 
-        var xml = try script.xml();
-        try xml.toast(.open(.{ .scenario = .reminder }));
-        try xml.visual(.open);
-        try xml.binding(.open("ToastGeneric"));
+        const xml_document = try XmlDocument.init();
+        defer xml_document.deinit();
 
-        try xml.text("{notificationTitle}", "title");
+        var cid: usize = 0;
+        {
+            const toast_tag = try WindowsCreateString(L("toast"));
+            defer WindowsDeleteString(toast_tag);
 
-        if (config.body != null) {
-            try xml.text("{notificationBody}", null);
-        }
+            const toastElement = try xml_document.CreateElement(toast_tag.?);
+            defer _ = IUnknown.Release(@ptrCast(toastElement));
+            _ = try xml_document.AppendChild(@ptrCast(toastElement));
 
-        if (config.progress) |progress| {
-            try xml.progress(progress.title != null, progress.override != null);
-        }
+            {
+                const visual_tag = try WindowsCreateString(L("visual"));
+                defer WindowsDeleteString(visual_tag);
 
-        if (config.hero) |hero| {
-            try xml.image(.{
-                .src = hero.src,
-                .alt = hero.alt,
-                .placement = .hero,
-            });
-        }
+                const visualElement = try xml_document.CreateElement(visual_tag.?);
+                defer _ = IUnknown.Release(@ptrCast(visualElement));
+                _ = try toastElement.AppendChild(@ptrCast(visualElement));
 
-        if (config.logo) |logo| {
-            try xml.image(.{
-                .src = logo.src,
-                .alt = logo.alt,
-                .placement = .app_logo_override,
-                .hint_crop = if (logo.crop) .circle else null,
-            });
-        }
+                {
+                    const binding_tag = try WindowsCreateString(L("binding"));
+                    defer WindowsDeleteString(binding_tag);
 
-        try xml.binding(.close);
-        try xml.visual(.close);
+                    const bindingElement = try xml_document.CreateElement(binding_tag.?);
+                    defer _ = IUnknown.Release(@ptrCast(bindingElement));
+                    _ = try visualElement.AppendChild(@ptrCast(bindingElement));
 
-        try xml.actions(.open);
-        if (config.actions) |actions| {
-            for (actions) |action| {
-                try xml.action(action);
-            }
-        }
-        try xml.actions(.close);
+                    try addAttribute(bindingElement, L("template"), L("ToastGeneric"));
 
-        if (config.audio) |audio| {
-            try xml.audio(audio.sound, audio.loop);
-        }
+                    try addText(allocator, xml_document, bindingElement, config.title, cid, true);
+                    cid += 1;
+                    if (config.body) |body| {
+                        try addText(allocator, xml_document, bindingElement, body, cid, true);
+                        cid += 1;
+                    }
 
-        try xml.toast(.close);
-
-        var dictionary = try script.dictionary();
-        try dictionary.add("notificationTitle", config.title);
-
-        if (config.body) |body| try dictionary.add("notificationBody", body);
-
-        if (config.progress) |progress| {
-            switch (progress.value) {
-                .intermediate => try dictionary.add("progressValue", "intermediate"),
-                .value => |v| try dictionary.add("progressValue", v),
-            }
-            try dictionary.add("progressStatus", progress.status);
-            if (progress.title) |title| try dictionary.add("progressTitle", title);
-            if (progress.override) |override| try dictionary.add("progressValueString", override);
-        }
-
-        var xml_document = try script.xml_document();
-        try xml_document.loadXml(xml);
-
-        const toast_notification = try script.toast_notification(xml_document, tag);
-
-        if (config.audio) |audio| {
-            if (audio.sound == .custom_uri) {
-                var media_player = try script.media_player();
-                try media_player.createFromUri(audio.sound.custom_uri);
-                try media_player.play();
+                    // TODO: Add hero and logo images
+                    // TODO: Add actions
+                    // TODO: Add Progress
+                    // TODO: Add audio/sound
+                }
             }
         }
 
-        var notifier = try script.notifier(app_id orelse "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe");
-        try notifier.show(dictionary, 1, toast_notification);
+        const notification = try ToastNotification.CreateToastNotification(xml_document);
+        defer notification.deinit();
 
-        try script.endCommand();
-        try script.execute();
+        const h_tag = try WindowsCreateString(L("toast"));
+        defer WindowsDeleteString(h_tag);
+        try notification.putTag(h_tag.?);
+
+        var data = try NotificationData.init();
+        defer data.deinit();
+        try notification.putData(data);
+
+        // insertData(allocator, data.getValues(), L("NotificationData"), "Zig Windows Runtime");
+
+        // TODO: Add generic event handler
+        // const dhandler = try TypedEventHandler(ToastNotification, ToastDismissedEventArgs).init(dismissNotification);
+        // const dhandle = try notification.addDismissed(dhandler);
+        // const ahandler = try TypedEventHandler(ToastNotification, IInspectable).init(activatedNotification);
+        // const ahandle = try notification.addActivated(ahandler);
+        // const fhandler = try TypedEventHandler(ToastNotification, ToastFailedEventArgs).init(failedNotification);
+        // const fhandle = try notification.addFailed(fhandler);
+
+        var notifier = try ToastNotificationManager.CreateToastNotifierWithApplicationId(APP_ID.?);
+        defer _ = IUnknown.Release(@ptrCast(notifier));
+
+        try notifier.Show(notification);
 
         return .{
-            .tag = tag,
-            .app_id = app_id orelse "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe",
             .config = config,
+            .tag = tag,
+            .app_id = if(app_id) |id| id else powershell_app_id
         };
     }
 
     pub fn update(self: *const @This(), alloc: std.mem.Allocator, config: Update) !void {
-        var script = Script.init(alloc);
-        defer script.deinit();
-
-        try script.startCommand();
-
-        var dictionary = try script.dictionary();
-        if (config.title) |title| {
-            try dictionary.add("notificationTitle", title);
-        }
-
-        if (config.body) |body| {
-            if (self.config.body == null) return error.NotificationBodyNotConfigured;
-            try dictionary.add("notificationBody", body);
-        }
-
-        if (config.progress) |progress| {
-            if (self.config.progress == null) return error.NotificationProgressNotConfigured;
-            if (progress.title) |title| {
-                if (self.config.progress.?.title == null) return error.NotificationProgressTitleNotConfigured;
-                try dictionary.add("progressTitle", title);
-            }
-
-            if (progress.value) |value| {
-                switch (value) {
-                    .intermediate => try dictionary.add("progressValue", "intermediate"),
-                    .value => |v| try dictionary.add("progressValue", v),
-                }
-            }
-
-            if (progress.status) |status| {
-                try dictionary.add("progressStatus", status);
-            }
-
-            if (progress.override) |override| {
-                if (self.config.progress.?.override == null) return error.NotificationProgressValueStringNotConfigured;
-                try dictionary.add("progressValueString", override);
-            }
-        }
-
-        var notifier = try script.notifier(self.app_id);
-        try notifier.update(dictionary, 2, self.tag);
-
-        try script.endCommand();
-        try script.execute();
+        _ = self;
+        _ = alloc;
+        _ = config;
+        // TODO: Create NotificationData and send an update to the action center
     }
 };
