@@ -1,4 +1,4 @@
-const kam = @import("win32").ui.input.keyboard_and_mouse;
+const kam = @import("windows").win32.ui.input.keyboard_and_mouse;
 const VirtualKey = @import("../input.zig").VirtualKey;
 
 pub fn virtualKeyToCode(virtual_key: VirtualKey) i32 {

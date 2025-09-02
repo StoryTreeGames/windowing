@@ -1,6 +1,8 @@
-const wam = @import("win32").ui.windows_and_messaging;
-const kam = @import("win32").ui.input.keyboard_and_mouse;
-const zig = @import("win32").zig;
+const win32 = @import("windows").win32;
+
+const wam = win32.ui.windows_and_messaging;
+const kam = win32.ui.input.keyboard_and_mouse;
+const zig = win32.zig;
 const CursorType = @import("../cursor.zig").CursorType;
 const Rect = @import("../root.zig").Rect;
 const Point = @import("../root.zig").Point;

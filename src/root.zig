@@ -44,13 +44,16 @@ pub const Color = packed struct(u32) {
 pub const Font = struct {
     height: u16,
     width: u16,
-    point_size: u16,
+    point_size: u32,
     color: Color,
     weight: u32,
     italic: bool,
     underline: bool,
     strikeout: bool,
-    // TODO: allocate or have better representation
     name: []const u8,
     // TODO: precisions, charset, quality, pitch and family, orientation, escapement
+
+    pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+    }
 };

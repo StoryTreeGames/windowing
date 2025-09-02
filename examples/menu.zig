@@ -82,9 +82,8 @@ pub fn main() !void {
         .action("quit", "Quit"),
     });
 
-    while (event_loop.isActive()) {
-        if (try event_loop.poll()) |data| {
-            try app.handleEvent(&event_loop, data.window, data.event);
-        }
+    while (event_loop.isActive()) { 
+        const data = event_loop.next();
+        try app.handleEvent(&event_loop, data.window, data.event);
     }
 }

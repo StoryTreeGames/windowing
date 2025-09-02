@@ -1,24 +1,24 @@
 .{
     .name = .storytree_core,
     .version = "0.0.0",
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.1",
     .fingerprint = 0xf92bb48417113673,
     .dependencies = .{
-        .zigwin32 = .{
-            .url = "git+https://github.com/marlersoft/zigwin32?ref=main#d21b419d808215e1f82605fdaddc49750bfa3bca",
-            .hash = "zigwin32-25.0.28-preview-AAAAAI0J-wP-8_KKo4Yjr33XLhVhlJmeagGUedByaOnX",
-        },
         .uuid = .{
-            .url = "git+https://github.com/r4gus/uuid-zig?ref=0.3.1#9d66e23e32cd7208d1becb4fd9352f8a27f89551",
-            .hash = "uuid-0.3.0-oOieIYF1AAA_BtE7FvVqqTn5uEYTvvz7ycuVnalCOf8C",
+            .url = "git+https://github.com/r4gus/uuid-zig#93f35b4abbef52db7b48fd20084e73d3c6e20ee0",
+            .hash = "uuid-0.4.0-oOieIR2AAAChAUVBY4ABjYI1XN0EbVALmiN0JIlggC3i",
         },
         .wgpu_native_zig = .{
-            .url = "git+https://github.com/bronter/wgpu_native_zig?ref=v5.0.0#2012f51c16d29824ea15cc4db6e46fc5bb44e868",
-            .hash = "wgpu_native_zig-5.0.0-B9jeDOGZAgAkyePsJjgwsgHgo0guYS7S9cQqDcZx9kXL",
+            .url = "git+https://github.com/bronter/wgpu_native_zig#ed408d55240160b6fea9a51e317dc40851b48102",
+            .hash = "wgpu_native_zig-6.5.0-B9jeDFtzAwB1vPOiXTd2BqrP1j4phYk-oBbxbpLKY3xD",
         },
         .wayland = .{
-            .url = "git+https://github.com/ifreund/zig-wayland#65b01fb69148013eea882c8222a82a1d96a6241b",
-            .hash = "wayland-0.4.0-dev-lQa1krLJAQBGO2aKqDcfxUOsW_e4PJZO_K_rxA20RztB",
+            .url = "git+https://github.com/ifreund/zig-wayland#1b5c038ec10da20ed3a15b0b2a6db1c21383e8ea",
+            .hash = "wayland-0.5.0-dev-lQa1khrMAQDJDwYFKpdH3HizherB7sHo5dKMECfvxQHe",
+        },
+        .windows = .{
+            .url = "git+https://github.com/Tired-Fox/windows-zig#55e44a73f110fff10403d48a4683786e272c95fb",
+            .hash = "windows-0.0.0-kXMVSplPFwLcavZPddbcEj4UT7w97gTFjoqYyBAP6vLi",
         },
     },
     .paths = .{

@@ -59,7 +59,8 @@ pub fn main() !void {
     if (true) {
         const result = try core.dialog.font(allocator, .{});
         if (result) |font| {
-            defer allocator.free(font.name);
+            defer font.deinit(allocator);
+
             std.debug.print("{{\n  Font Name: {s}\n", .{ font.name });
             std.debug.print("  Weight: {d}\n", .{ font.weight });
             std.debug.print("  Point Size: {d}\n}}\n", .{ font.point_size });

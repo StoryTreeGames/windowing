@@ -128,7 +128,7 @@ pub const FontOptions = struct {
     color: Color = .{},
     face: []const u8 = "Arial",
     style: []const u8 = "Regular",
-    point_size: i16 = 12,
+    point_size: i32 = 12,
 };
 
 pub const message = impl.message;

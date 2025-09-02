@@ -34,7 +34,11 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const module = b.addModule(NAME, .{ .root_source_file = b.path("src/root.zig"), .target = target, .optimize = optimize });
+    const module = b.addModule(NAME, .{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
     var wayland: ?*std.Build.Module = null;
     var scanner: ?*Scanner = null;
@@ -47,7 +51,7 @@ pub fn build(b: *std.Build) !void {
         scanner.?.generate("xdg_wm_base", 1);
     }
 
-    const zigwin32 = b.dependency("zigwin32", .{});
+    const windows_zig = b.dependency("windows", .{});
     const uuid = b.dependency("uuid", .{});
     const wgpu_native = b.dependency("wgpu_native_zig", .{});
 
@@ -55,14 +59,15 @@ pub fn build(b: *std.Build) !void {
     if (builtin.target.os.tag == .windows) {
         // Note: To build exe so a console window doesn't appear
         // Add this to any exe build: `exe.subsystem = .Windows;`
-        module.addImport("win32", zigwin32.module("win32"));
+        module.addImport("windows", windows_zig.module("windows"));
     }
 
-    const lib_unit_tests = b.addTest(.{
+    const test_module = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
+    const lib_unit_tests = b.addTest(.{ .root_module = test_module });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
@@ -104,23 +109,24 @@ pub fn addExample(
     link_lib_c: bool,
     system_libraries: []const std.meta.Tuple(&.{ []const u8, Tag }),
 ) void {
-    const exe = b.addExecutable(.{
-        .name = example.name,
+    const exe_module = b.createModule(.{
         .root_source_file = b.path(example.path),
         .target = target,
         .optimize = optimize,
     });
 
+    for (modules) |module| {
+        if (module[1]) |mod| {
+            exe_module.addImport(module[0], mod);
+        }
+    }
+
+    const exe = b.addExecutable(.{ .name = example.name, .root_module = exe_module });
+
     if (link_lib_c) exe.linkLibC();
     for (system_libraries) |library| {
         if (library[1] == builtin.target.os.tag) {
             exe.linkSystemLibrary(library[0]);
-        }
-    }
-
-    for (modules) |module| {
-        if (module[1]) |mod| {
-            exe.root_module.addImport(module[0], mod);
         }
     }
 

@@ -1,10 +1,11 @@
 const std = @import("std");
+const win32 = @import("windows").win32;
 
-const windows_and_messaging = @import("win32").ui.windows_and_messaging;
-const graphics = @import("win32").graphics;
-const foundation = @import("win32").foundation;
-const keyboard_and_mouse = @import("win32").ui.input.keyboard_and_mouse;
-const zig = @import("win32").zig;
+const windows_and_messaging = win32.ui.windows_and_messaging;
+const graphics = win32.graphics;
+const foundation = win32.foundation;
+const keyboard_and_mouse = win32.ui.input.keyboard_and_mouse;
+const zig = win32.zig;
 
 const MenuInfo = @import("../menu.zig").Info;
 const event = @import("../event.zig");
@@ -29,7 +30,7 @@ const VK_RSHIFT = keyboard_and_mouse.VK_RSHIFT;
 
 const PRESSED: u8 = 0b10000000;
 
-pub fn poll() !bool {
+pub fn poll() bool {
     var message: windows_and_messaging.MSG = undefined;
     if (windows_and_messaging.PeekMessageW(&message, null, 0, 0, windows_and_messaging.PM_REMOVE) != 0) {
         _ = windows_and_messaging.TranslateMessage(&message);

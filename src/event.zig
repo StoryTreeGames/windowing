@@ -129,40 +129,87 @@ pub const Event = union(enum) {
     theme: enum { light, dark },
 };
 
-pub fn QueueUnmanaged(comptime T: type) type {
+/// Linked queue (unbounded except by memory).
+/// - Non-blocking: tryPop returns null when empty; push allocates a node per item.
+/// - No Conditions/Mutexes. Just atomic pointer handoff.
+pub fn LinkedQueueUnmanaged(comptime T: type) type {
     return struct {
+        const Self = @This();
+
+        const Node = struct {
+            next: ?*Node,
+            value: T,
+        };
+
         mutex: std.Thread.Mutex = .{},
-        items: std.DoublyLinkedList(T) = .{},
 
-        pub const Self = @This();
-        pub const Node = std.DoublyLinkedList(T).Node;
+        head: ?*Node = null, // oldest
+        tail: ?*Node = null, // newest
+        count: usize = 0,
 
-        pub fn append(self: *Self, allocator: std.mem.Allocator, value: T) !void {
+        pub const PushError = std.mem.Allocator.Error;
+
+        /// Frees any remaining nodes. Ensure no threads are using the queue.
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            self.mutex.lock();
+            var cur = self.head;
+            self.head = null;
+            self.tail = null;
+            self.count = 0;
+            self.mutex.unlock();
+
+            while (cur) |n| {
+                const next = n.next;
+                allocator.destroy(n);
+                cur = next;
+            }
+        }
+
+        /// Enqueue one value. Allocates a node; never blocks (aside from the lock).
+        pub fn append(self: *Self, allocator: std.mem.Allocator, value: T) PushError!void {
+            const n = try allocator.create(Node);
+            n.* = .{ .next = null, .value = value };
+
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const new_node = try allocator.create(Node);
-            new_node.data = value;
-            self.items.append(new_node);
+            if (self.tail) |t| {
+                t.next = n;
+            } else {
+                self.head = n;
+            }
+            self.tail = n;
+            self.count += 1;
         }
 
+        /// Dequeue one value if available; returns null when empty.
         pub fn pop(self: *Self, allocator: std.mem.Allocator) ?T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            if (self.items.popFirst()) |value| {
-                const inner = value.data;
-                defer allocator.destroy(value);
-                return inner;
-            }
-            return null;
+            const h = self.head orelse return null;
+
+            // Detach head
+            const next = h.next;
+            self.head = next;
+            if (next == null) self.tail = null;
+            self.count -= 1;
+
+            const result = h.value;
+            allocator.destroy(h);
+            return result;
         }
 
         pub fn isEmpty(self: *Self) bool {
             self.mutex.lock();
             defer self.mutex.unlock();
+            return self.head == null;
+        }
 
-            return self.items.len == 0;
+        pub fn len(self: *Self) usize {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+            return self.count;
         }
     };
 }
@@ -171,7 +218,7 @@ pub const EventLoop = struct {
     arena: std.heap.ArenaAllocator,
 
     windows: std.AutoArrayHashMapUnmanaged(usize, *Window) = .empty,
-    queue: QueueUnmanaged(std.meta.Tuple(&.{ usize, Event })) = .{},
+    queue: LinkedQueueUnmanaged(std.meta.Tuple(&.{ usize, Event })) = .{},
 
     pub fn init(allocator: std.mem.Allocator) !@This() {
         return .{ .arena = std.heap.ArenaAllocator.init(allocator) };
@@ -208,14 +255,26 @@ pub const EventLoop = struct {
         return self.windows.count() > 0;
     }
 
-    pub fn poll(self: *@This()) !?WindowEvent {
-        _ = try impl.poll();
+    /// Poll for a new event
+    ///
+    /// `null` if no new events else `WindowEvent`
+    pub fn poll(self: *@This()) ?WindowEvent {
+        _ = impl.poll();
         if (self.queue.pop(self.arena.allocator())) |data| {
             if (self.windows.get(data[0])) |win| {
                 return .{ .window = win, .event = data[1] };
             }
         }
         return null;
+    }
+
+    /// Get the next event
+    ///
+    /// Blocks until polling returns the next event
+    pub fn next(self: *@This()) WindowEvent {
+        while (true) {
+            if (self.poll()) |event| return event;
+        }
     }
 
     pub fn handleEvent(self: *@This(), args: anytype) bool {

@@ -10,7 +10,7 @@ const MenuItem = _menu.Item;
 const MenuCheckable = _menu.Checkable;
 const MenuAction = _menu.Action;
 
-const win32 = @import("win32");
+const win32 = @import("windows").win32;
 const foundation = win32.foundation;
 const windows_and_messaging = win32.ui.windows_and_messaging;
 const keyboard_and_mouse = win32.ui.input.keyboard_and_mouse;
@@ -31,7 +31,6 @@ const Win = @import("../window.zig");
 const EventLoop = @import("../event.zig").EventLoop;
 
 const HMENU = windows_and_messaging.HMENU;
-const WINAPI = std.os.windows.WINAPI;
 
 const Icon = union(enum) {
     icon: IconType,
@@ -632,7 +631,7 @@ fn wndProc(
     uMsg: u32,
     wparam: foundation.WPARAM,
     lparam: foundation.LPARAM,
-) callconv(WINAPI) foundation.LRESULT {
+) callconv(.winapi) foundation.LRESULT {
     if (uMsg == windows_and_messaging.WM_CREATE) {
         // Get CREATESTRUCTW pointer from lparam
         const lpptr: usize = @intCast(lparam);

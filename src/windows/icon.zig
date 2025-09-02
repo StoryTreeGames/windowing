@@ -1,4 +1,4 @@
-const wam = @import("win32").ui.windows_and_messaging;
+const wam = @import("windows").win32.ui.windows_and_messaging;
 const IconType = @import("../icon.zig").IconType;
 
 /// Helper (Windows): Make an int resource referencing the name of the resource.

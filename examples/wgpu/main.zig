@@ -51,7 +51,7 @@ pub fn main() !void {
     defer app.deinit();
 
     while (event_loop.isActive()) {
-        if (try event_loop.poll()) |data| {
+        if (event_loop.poll()) |data| {
             try app.handleEvent(&event_loop, data.window, data.event);
         } else {
             app.renderer.render() catch break;

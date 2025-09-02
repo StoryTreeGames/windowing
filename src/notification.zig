@@ -219,7 +219,7 @@ pub const Update = struct {
 };
 
 const Impl = switch(@import("builtin").os.tag) {
-    .windows => @import("windows/notification.zig").Notification,
+    .windows => @import("windows/notification.zig"),
     else => @compileError("unsupported platform")
 };
 
