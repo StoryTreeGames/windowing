@@ -639,7 +639,7 @@ const MediaContext = struct {
 };
 
 const MediaHandlers = struct{
-    pub fn onOpened(state: ?*anyopaque, sender: *MediaPlayer, args: *IInspectable) callconv(.winapi) void {
+    pub fn onOpened(state: ?*anyopaque, sender: *MediaPlayer, args: *IInspectable) void {
         _ = sender;
         _ = args;
 
@@ -647,7 +647,7 @@ const MediaHandlers = struct{
         ctx.channel.post();
     }
 
-    pub fn onFail(state: ?*anyopaque, sender: *MediaPlayer, args: *MediaPlayerFailedEventArgs) callconv(.winapi) void {
+    pub fn onFail(state: ?*anyopaque, sender: *MediaPlayer, args: *MediaPlayerFailedEventArgs) void {
         _ = sender;
 
         const ctx: *MediaContext = @ptrCast(@alignCast(state.?));
@@ -657,7 +657,7 @@ const MediaHandlers = struct{
 };
 
 const ToastHandlers = struct {
-    pub fn dismiss(state: ?*anyopaque, _: *ToastNotification, args: *ToastDismissedEventArgs) callconv(.winapi) void {
+    pub fn dismiss(state: ?*anyopaque, _: *ToastNotification, args: *ToastDismissedEventArgs) void {
         const instance: *Notification = @ptrCast(@alignCast(state.?));
 
         if (instance.config.onDismiss) |onDismiss| {
@@ -670,7 +670,7 @@ const ToastHandlers = struct {
         }
     }
 
-    pub fn activate(state: ?*anyopaque, _: *ToastNotification, args: *IInspectable) callconv(.winapi) void {
+    pub fn activate(state: ?*anyopaque, _: *ToastNotification, args: *IInspectable) void {
         const input: *ToastActivatedEventArgs = @ptrCast(args);
         const instance: *Notification = @ptrCast(@alignCast(state.?));
 
@@ -686,7 +686,7 @@ const ToastHandlers = struct {
         }
     }
 
-    pub fn fail(state: ?*anyopaque, _: *ToastNotification, args: *ToastFailedEventArgs) callconv(.winapi) void {
+    pub fn fail(state: ?*anyopaque, _: *ToastNotification, args: *ToastFailedEventArgs) void {
         _ = args;
         const instance: *Notification = @ptrCast(@alignCast(state.?));
         if (instance.config.onFail) |onFail| {
