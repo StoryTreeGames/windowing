@@ -62,7 +62,6 @@ pub fn main() !void {
     _ = try notif.Notification.send(allocator, null, "storytree-core-example-notif", .{
         .title = "Test Notification",
         .body = "Test notification from storytree core",
-        .audio = .{ .sound = .custom("C:\\Users\\dorkd\\Repo\\StoryTree\\windowing\\examples\\assets\\lizard_notification.mp3") },
     });
 
     var app = App{ .allocator = allocator };

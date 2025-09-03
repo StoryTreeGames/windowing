@@ -17,8 +17,8 @@
             .hash = "wayland-0.5.0-dev-lQa1khrMAQDJDwYFKpdH3HizherB7sHo5dKMECfvxQHe",
         },
         .windows = .{
-            .url = "git+https://github.com/Tired-Fox/windows-zig#55e44a73f110fff10403d48a4683786e272c95fb",
-            .hash = "windows-0.0.0-kXMVSplPFwLcavZPddbcEj4UT7w97gTFjoqYyBAP6vLi",
+            .url = "git+https://github.com/Tired-Fox/windows-zig#a67ede9f59d0357bc775e46a890ff7b69cb57d78",
+            .hash = "windows-0.0.0-kXMVSuuwFwIf1dBsJw4ARlU4Ug9OJCMi3C3JSd7ssvI8",
         },
     },
     .paths = .{

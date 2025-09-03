@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const Progress = union(enum) {
-    intermediate: void,
+    indeterminate: void,
     value: f32,
     pub fn progress(v: f32) @This() {
         return .{ .value = v };
@@ -32,12 +32,12 @@ pub const Action = union(enum) {
     };
 
     pub const ButtonAction = struct {
-        /// Content displayed on the button
-        content: []const u8 = "",
         /// App-defined string of arguments that the app will later receive
         /// if the user clicks the button
         arguments: []const u8,
 
+        /// Content displayed on the button
+        content: []const u8 = "",
         /// Decides the type of activation that will be used when the user interacts
         /// with a specific action
         activation_type: ?ActiviationType = null,
@@ -205,11 +205,18 @@ pub const Config = struct {
         sound: Audio,
         loop: ?bool = null,
     } = null,
+    onDismiss: ?*const fn(notification: *const Notification, reason: DismissReason) void = null,
+    onActivated: ?*const fn(notification: *const Notification, arguments: []const u8) void = null,
+    onFail: ?*const fn(notification: *const Notification) void = null,
+};
+
+pub const DismissReason = enum {
+    cancel,
+    hidden,
+    timeout,
 };
 
 pub const Update = struct {
-    title: ?[]const u8 = null,
-    body: ?[]const u8 = null,
     progress: ?struct {
         value: ?Progress = null,
         status: ?[]const u8 = null,

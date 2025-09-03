@@ -8,26 +8,12 @@ const NAME = "storytree-core";
 const EXAMPLES = "examples";
 
 const examples = [_]Example{
-    .{
-        .name = "dev",
-        .path = EXAMPLES ++ "/dev.zig",
-    },
-    .{
-        .name = "wgpu",
-        .path = EXAMPLES ++ "/wgpu/main.zig",
-    },
-    .{
-        .name = "dialog",
-        .path = EXAMPLES ++ "/dialog.zig",
-    },
-    .{
-        .name = "window_menu",
-        .path = EXAMPLES ++ "/menu.zig",
-    },
-    .{
-        .name = "linux",
-        .path = EXAMPLES ++ "/linux.zig",
-    },
+    .{ .name = "dev", .path = EXAMPLES ++ "/dev.zig" },
+    .{ .name = "wgpu", .path = EXAMPLES ++ "/wgpu/main.zig" },
+    .{ .name = "dialog", .path = EXAMPLES ++ "/dialog.zig" },
+    .{ .name = "window_menu", .path = EXAMPLES ++ "/menu.zig" },
+    .{ .name = "linux", .path = EXAMPLES ++ "/linux.zig" },
+    .{ .name = "notification", .path = EXAMPLES ++ "/notification.zig" },
 };
 
 pub fn build(b: *std.Build) !void {
