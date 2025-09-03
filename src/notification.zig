@@ -37,7 +37,7 @@ pub const Action = union(enum) {
         arguments: []const u8,
 
         /// Content displayed on the button
-        content: []const u8 = "",
+        content: ?[]const u8 = null,
         /// Decides the type of activation that will be used when the user interacts
         /// with a specific action
         activation_type: ?ActiviationType = null,

@@ -374,11 +374,13 @@ pub const Notification = struct {
 
                             try addAttributeUtf8(allocator, action_element, L("arguments"), button.arguments);
 
-                            {
-                                const wcontent = try std.unicode.utf8ToUtf16LeAllocZ(allocator, button.content);
-                                defer allocator.free(wcontent);
+                            if (button.content) |content| {
+                                try addAttributeUtf8(allocator, action_element, L("content"), content);
+                            } else {
+                                const aname = try WindowsCreateString(L("content"));
+                                defer WindowsDeleteString(aname);
+                                try action_element.SetAttribute(aname, null);
                             }
-                            try addAttributeUtf8(allocator, action_element, L("content"), button.content);
 
                             if (button.activation_type) |atype| {
                                 try addAttribute(action_element, L("activationType"), switch (atype) {
