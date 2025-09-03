@@ -60,21 +60,28 @@ pub fn WindowsGetString(string: ?HSTRING) ?[]const u16 {
     return null;
 }
 
-pub fn addAttribute(xmlElement: *XmlElement, key: [:0]const u16, value: [:0]const u16) !void {
+pub fn addAttribute(xmlElement: *XmlElement, key: [:0]const u16, value: ?[:0]const u16) !void {
     const aname = try WindowsCreateString(key);
     defer WindowsDeleteString(aname);
 
-    const avalue = try WindowsCreateString(value);
-    defer WindowsDeleteString(avalue);
-
-    try xmlElement.SetAttribute(aname, avalue);
+    if (value == null or value.?.len == 0) {
+        try xmlElement.SetAttribute(aname, null);
+    } else {
+        const avalue = try WindowsCreateString(value.?);
+        defer WindowsDeleteString(avalue);
+        try xmlElement.SetAttribute(aname, avalue);
+    }
 }
 
-pub fn addAttributeUtf8(allocator: std.mem.Allocator, xmlElement: *XmlElement, key: [:0]const u16, value: []const u8) !void {
-    const wide_value = try std.unicode.utf8ToUtf16LeAllocZ(allocator, value);
-    defer allocator.free(wide_value);
+pub fn addAttributeUtf8(allocator: std.mem.Allocator, xmlElement: *XmlElement, key: [:0]const u16, value: ?[]const u8) !void {
+    if (value == null or value.?.len == 0) {
+        try addAttribute(xmlElement, key, null);
+    } else {
+        const wide_value = try std.unicode.utf8ToUtf16LeAllocZ(allocator, value.?);
+        defer allocator.free(wide_value);
+        try addAttribute(xmlElement, key, wide_value);
+    }
 
-    try addAttribute(xmlElement, key, wide_value);
 }
 
 pub fn addText(allocator: std.mem.Allocator, doc: *XmlDocument, parent: *XmlElement, content: []const u8, id: usize, hint_title: bool) !void {
@@ -373,14 +380,7 @@ pub const Notification = struct {
                             _ = try actions_element.AppendChild(@ptrCast(action_element));
 
                             try addAttributeUtf8(allocator, action_element, L("arguments"), button.arguments);
-
-                            if (button.content) |content| {
-                                try addAttributeUtf8(allocator, action_element, L("content"), content);
-                            } else {
-                                const aname = try WindowsCreateString(L("content"));
-                                defer WindowsDeleteString(aname);
-                                try action_element.SetAttribute(aname, null);
-                            }
+                            try addAttributeUtf8(allocator, action_element, L("content"), button.content);
 
                             if (button.activation_type) |atype| {
                                 try addAttribute(action_element, L("activationType"), switch (atype) {
