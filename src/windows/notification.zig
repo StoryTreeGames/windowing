@@ -6,6 +6,8 @@ const process = std.process;
 const windows = @import("windows");
 const win32 = windows.win32;
 
+const Guid = windows.Guid;
+
 const XmlDocument = windows.Data.Xml.Dom.XmlDocument;
 const XmlElement = windows.Data.Xml.Dom.XmlElement;
 const IXmlNode = windows.Data.Xml.Dom.IXmlNode;
@@ -29,6 +31,7 @@ const MediaSource = windows.Media.Core.MediaSource;
 const MediaPlayerFailedEventArgs = windows.Media.Playback.MediaPlayerFailedEventArgs;
 const MediaPlayerError = windows.Media.Playback.MediaPlayerError;
 const Uri = windows.Foundation.Uri;
+const IPropertyValue = windows.Foundation.IPropertyValue;
 
 const notif = @import("../notification.zig");
 const Config = notif.Config;
@@ -81,7 +84,6 @@ pub fn addAttributeUtf8(allocator: std.mem.Allocator, xmlElement: *XmlElement, k
         defer allocator.free(wide_value);
         try addAttribute(xmlElement, key, wide_value);
     }
-
 }
 
 pub fn addText(allocator: std.mem.Allocator, doc: *XmlDocument, parent: *XmlElement, content: []const u8, id: usize, hint_title: bool) !void {
@@ -220,6 +222,7 @@ pub const Notification = struct {
     tag: []const u8,
     app_id: [:0]const u16,
 
+    allocator: std.mem.Allocator,
     inner: *ToastNotification,
 
     dismiss: ?EventRegistrationToken = null,
@@ -420,7 +423,7 @@ pub const Notification = struct {
                                 }
                             }
                             if (button.hint_input_id) |id| {
-                                try addAttributeUtf8(allocator, action_element, L("hint-inputid"), id);
+                                try addAttributeUtf8(allocator, action_element, L("hint-inputId"), id);
                             }
                             if (button.hint_tool_tip) |tip| {
                                 try addAttributeUtf8(allocator, action_element, L("hint-toolTip"), tip);
@@ -446,6 +449,14 @@ pub const Notification = struct {
                     },
                 }
             }
+        }
+
+        {
+            const xml = try xml_document.GetXml();
+            const wide_xml = WindowsGetString(xml).?;
+            const h = std.os.windows.GetStdHandle(std.os.windows.STD_OUTPUT_HANDLE) catch unreachable;
+            var written: u32 = 0;
+            _ = std.os.windows.kernel32.WriteConsoleW(h, wide_xml.ptr, @intCast(wide_xml.len), &written, null);
         }
 
         const notification = try ToastNotification.CreateToastNotification(xml_document);
@@ -488,9 +499,10 @@ pub const Notification = struct {
             .config = config,
             .tag = tag,
             .app_id = aid,
+            .allocator = allocator,
             .inner = notification,
         };
-        errdefer instance.deinit(allocator);
+        errdefer instance.deinit();
 
         const dhandler = try TypedEventHandler(ToastNotification, ToastDismissedEventArgs).initWithState(ToastHandlers.dismiss, instance);
         instance.dismiss = try notification.addDismissed(dhandler);
@@ -513,7 +525,9 @@ pub const Notification = struct {
         return instance;
     }
 
-    pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *const @This()) void {
+        const allocator = self.allocator;
+
         if (self.dismiss) |dismiss| self.inner.removeDismissed(dismiss) catch {};
         if (self.activate) |activate| self.inner.removeActivated(activate) catch {};
         if (self.fail) |fail| self.inner.removeFailed(fail) catch {};
@@ -533,7 +547,7 @@ pub const Notification = struct {
         try notifier.Hide(self.inner);
     }
 
-    pub fn update(self: *const @This(), allocator: std.mem.Allocator, config: Update) !void {
+    pub fn update(self: *const @This(), config: Update) !void {
         const APP_ID = try WindowsCreateString(self.app_id);
         defer WindowsDeleteString(APP_ID);
 
@@ -547,26 +561,26 @@ pub const Notification = struct {
 
             if (progress.value) |value| {
                 switch (value) {
-                    .indeterminate => try insertData(allocator, values, L("progressValue"), "indeterminate"),
+                    .indeterminate => try insertData(self.allocator, values, L("progressValue"), "indeterminate"),
                     .value => |float| {
-                        const v = try std.fmt.allocPrint(allocator, "{d}", .{float});
-                        defer allocator.free(v);
-                        try insertData(allocator, values, L("progressValue"), v);
+                        const v = try std.fmt.allocPrint(self.allocator, "{d}", .{float});
+                        defer self.allocator.free(v);
+                        try insertData(self.allocator, values, L("progressValue"), v);
                     },
                 }
             }
 
             if (progress.status) |status| {
-                try insertData(allocator, values, L("progressStatus"), status);
+                try insertData(self.allocator, values, L("progressStatus"), status);
             }
 
             if (progress.title) |title| {
                 if (self.config.progress.?.title == null) return error.NotificationProgressTitleNotConfigured;
-                try insertData(allocator, values, L("progressTitle"), title);
+                try insertData(self.allocator, values, L("progressTitle"), title);
             }
             if (progress.override) |override| {
                 if (self.config.progress.?.override == null) return error.NotificationProgressValueStringNotConfigured;
-                try insertData(allocator, values, L("progressValueString"), override);
+                try insertData(self.allocator, values, L("progressValueString"), override);
             }
         }
 
@@ -594,7 +608,7 @@ fn oneshotSound(allocator: std.mem.Allocator, audio_uri: []const u8) !void {
     } else {
         const realpath = try std.fs.realpathAlloc(allocator, audio_uri);
         defer allocator.free(realpath);
-        const custom = try std.fmt.allocPrint(allocator, "file:///{s}", .{ realpath });
+        const custom = try std.fmt.allocPrint(allocator, "file:///{s}", .{realpath});
         defer allocator.free(custom);
         w_uri = try std.unicode.utf8ToUtf16LeAllocZ(allocator, custom);
     }
@@ -633,12 +647,9 @@ fn oneshotSound(allocator: std.mem.Allocator, audio_uri: []const u8) !void {
     try player.Play();
 }
 
-const MediaContext = struct {
-    failed: ?MediaPlayerError = null,
-    channel: std.Thread.Semaphore = .{}
-};
+const MediaContext = struct { failed: ?MediaPlayerError = null, channel: std.Thread.Semaphore = .{} };
 
-const MediaHandlers = struct{
+const MediaHandlers = struct {
     pub fn onOpened(state: ?*anyopaque, sender: *MediaPlayer, args: *IInspectable) void {
         _ = sender;
         _ = args;
@@ -675,14 +686,47 @@ const ToastHandlers = struct {
         const instance: *Notification = @ptrCast(@alignCast(state.?));
 
         if (instance.config.onActivated) |onActivated| {
+            var arena = std.heap.ArenaAllocator.init(instance.allocator);
+            defer arena.deinit();
+            const allocator = arena.allocator();
+
             const h_args = if (input.getArguments()) |h_args| h_args else |_| return;
             const w_args = WindowsGetString(h_args).?;
-            const arguments = std.unicode.utf16LeToUtf8Alloc(std.heap.c_allocator, w_args) catch return;
-            defer std.heap.c_allocator.free(arguments);
+            const arguments = std.unicode.utf16LeToUtf8Alloc(allocator, w_args) catch return;
+            defer allocator.free(arguments);
 
-            // TODO: Get user input so that the input can be queried
+            var user_input: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
+            const ui = input.getUserInput() catch unreachable;
+            const it = ui.First() catch unreachable;
 
-            onActivated(instance, arguments);
+            var more = true;
+            while (more) : (more = it.MoveNext() catch false) {
+                const i = it.getCurrent() catch continue;
+                const h_key: ?HSTRING = i.getKey() catch continue;
+                const wide_key = WindowsGetString(h_key);
+                const key = std.unicode.utf16LeToUtf8Alloc(allocator, wide_key orelse &[0]u16{}) catch continue;
+                defer allocator.free(key);
+
+                const v = i.getValue() catch continue;
+                var prop_val: ?*IPropertyValue = undefined;
+                const hresult = IUnknown.QueryInterface(@ptrCast(v), &IPropertyValue.IID, @ptrCast(&prop_val));
+                if (hresult != 0 or prop_val == null) continue;
+
+                defer _ = IUnknown.Release(@ptrCast(prop_val.?));
+                const h_opt = prop_val.?.GetString() catch continue;
+                const wide_value = WindowsGetString(h_opt);
+
+                const value = std.unicode.utf16LeToUtf8Alloc(allocator, wide_value orelse &[0]u16{}) catch continue;
+                defer allocator.free(value);
+
+                user_input.put(
+                    allocator,
+                    allocator.dupe(u8, key) catch continue,
+                    allocator.dupe(u8, value) catch continue,
+                ) catch continue;
+            }
+
+            onActivated(instance, .{ .arguments = arguments, .inputs = &user_input });
         }
     }
 

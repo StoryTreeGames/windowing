@@ -204,9 +204,16 @@ Hopefully this library will remain generic enough to be able to be used with mos
 
 - GLFW \(C\): https://www.glfw.org/docs/3.3/window_guide.html
 - Winit (Rust): https://github.com/rust-windowing/winit
-  - [windows::window](https://github.com/rust-windowing/winit/blob/4cd6877e8e19e7e1ba957a409394dca1af4afcdd/src/platform_impl/windows/window.rs#L432))
+  - [windows::window](https://github.com/rust-windowing/winit/blob/4cd6877e8e19e7e1ba957a409394dca1af4afcdd/src/platform_impl/windows/window.rs#L432)
+- windows-rs (Rust): https://github.com/microsoft/windows-rs
+
 - CursorOption \(Rust\): https://docs.rs/cursor-icon/latest/cursor_icon/
+
 - Notifications
   - Windows
     - Toast Notification in plain C: https://gist.github.com/valinet/3283c79ba35fc8f103c747c8adbb6b23
     - Win32 ToastNotificationManager: https://learn.microsoft.com/en-us/uwp/api/windows.ui.notifications.toastnotificationmanager?view=winrt-26100
+
+- Gamepad Specification:
+  - W3C Gamepad API: https://www.w3.org/TR/gamepad/
+  - There is no standard for game engines but mimicking the one for web browsers makes sense

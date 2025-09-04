@@ -3,6 +3,7 @@ const core = @import("storytree-core");
 
 const Notification = core.notification.Notification;
 const DismissReason = core.notification.DismissReason;
+const ActivatedArgs = core.notification.ActivatedArgs;
 const Action = core.notification.Action;
 const relative_file_uri = @import("./common.zig").relative_file_uri;
 
@@ -10,8 +11,12 @@ fn dismissed(_: *const Notification, reason: DismissReason) void {
     std.debug.print("[DISMISSED] {s}\n", .{ @tagName(reason) });
 }
 
-fn activated(_: *const Notification, arguments: []const u8) void {
-    std.debug.print("[Activated] {s}\n", .{ arguments });
+fn activated(_: *const Notification, args: ActivatedArgs) void {
+    std.debug.print("[Activated] {s}\n", .{ args.arguments });
+    var it = args.inputs.iterator();
+    while (it.next()) |entry| {
+        std.debug.print("  - {s}: '{s}'\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+    }
 }
 
 pub fn main() !void {
@@ -37,6 +42,17 @@ pub fn main() !void {
             .override = " ",
         },
         .actions = &.{
+            // The actions are a 1-to-1 of the windows api
+            // and will change when other platforms are implemented
+            Action.Input(.{
+                .id = "username",
+                .title = "Username",
+            }),
+            Action.Button(.{
+                .arguments = "submit",
+                .content = "Submit",
+                .hint_input_id = "username",
+            }),
             Action.Button(.{
                 .arguments = "https://ziglang.org/",
                 .activation_type = .protocol,
@@ -54,7 +70,7 @@ pub fn main() !void {
         .onDismiss = dismissed,
         .onActivated = activated,
     });
-    defer notif.deinit(allocator);
+    defer notif.deinit();
 
     std.Thread.sleep(std.time.ns_per_s * 1);
 
@@ -64,7 +80,7 @@ pub fn main() !void {
 
         // This can fail if a button was clicked and the notification
         // is no longer in the action center on Windows
-        notif.update(allocator, .{
+        notif.update(.{
             .progress = .{
                 .value = .progress(0.1 * @as(f32, @floatFromInt(i))),
                 .status = "Fetching Updates...",
@@ -74,7 +90,7 @@ pub fn main() !void {
         std.Thread.sleep(std.time.ns_per_ms * 500);
     }
 
-    notif.update(allocator, .{ .progress = .{ .status = "Completed" } }) catch {};
+    notif.update(.{ .progress = .{ .status = "Completed" } }) catch {};
 
     std.Thread.sleep(std.time.ns_per_s * 1);
 

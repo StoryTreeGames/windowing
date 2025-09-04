@@ -206,7 +206,7 @@ pub const Config = struct {
         loop: ?bool = null,
     } = null,
     onDismiss: ?*const fn(notification: *const Notification, reason: DismissReason) void = null,
-    onActivated: ?*const fn(notification: *const Notification, arguments: []const u8) void = null,
+    onActivated: ?*const fn(notification: *const Notification, args: ActivatedArgs) void = null,
     onFail: ?*const fn(notification: *const Notification) void = null,
 };
 
@@ -214,6 +214,11 @@ pub const DismissReason = enum {
     cancel,
     hidden,
     timeout,
+};
+
+pub const ActivatedArgs = struct {
+    arguments: []const u8,
+    inputs: *const std.StringArrayHashMapUnmanaged([]const u8)
 };
 
 pub const Update = struct {
