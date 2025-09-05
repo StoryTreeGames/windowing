@@ -14,6 +14,7 @@ const examples = [_]Example{
     .{ .name = "window_menu", .path = EXAMPLES ++ "/menu.zig" },
     .{ .name = "linux", .path = EXAMPLES ++ "/linux.zig" },
     .{ .name = "notification", .path = EXAMPLES ++ "/notification.zig" },
+    .{ .name = "drag_drop", .path = EXAMPLES ++ "/drag_drop.zig" },
 };
 
 pub fn build(b: *std.Build) !void {
@@ -67,10 +68,11 @@ pub fn build(b: *std.Build) !void {
             optimize,
             example,
             &.{
-                .{ NAME, module },
-                .{ "wayland", wayland },
-                .{ "uuid", uuid.module("uuid") },
-                .{ "wgpu", wgpu_native.module("wgpu") },
+                .{ NAME, module, null },
+                .{ "wayland", wayland, null },
+                .{ "uuid", uuid.module("uuid"), null },
+                .{ "wgpu", wgpu_native.module("wgpu"), null },
+                .{ "windows", windows_zig.module("windows"), .windows },
             },
             builtin.target.os.tag == .linux,
             &.{
@@ -80,7 +82,7 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-const ModuleMap = std.meta.Tuple(&[_]type{ []const u8, ?*std.Build.Module });
+const ModuleMap = std.meta.Tuple(&[_]type{ []const u8, ?*std.Build.Module, ?std.Target.Os.Tag });
 const Example = struct {
     name: []const u8,
     path: []const u8,
@@ -103,7 +105,9 @@ pub fn addExample(
 
     for (modules) |module| {
         if (module[1]) |mod| {
-            exe_module.addImport(module[0], mod);
+            if (module[2] == null or builtin.target.os.tag == module[2]) {
+                exe_module.addImport(module[0], mod);
+            }
         }
     }
 

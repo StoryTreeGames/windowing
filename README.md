@@ -55,11 +55,11 @@ Hopefully this library will remain generic enough to be able to be used with mos
     - [x] Menu
     - [x] Repaint
     - [x] Theme Change
-    - [ ] Drag Drop Files
+    - [-] Drag Drop
   - [-] Query
     - [x] Keys
     - [x] Mouse
-    - [ ] Gamepad, controller, joystick, etc.
+    - [ ] Gamepad
   - [ ] Audio
   - [x] Notification
   - [ ] System Tray
@@ -102,7 +102,7 @@ Hopefully this library will remain generic enough to be able to be used with mos
     - [ ] Menu 
     - [ ] Repaint
     - [ ] Theme Change
-    - [ ] Drag Drop Files
+    - [ ] Drag Drop
   - [ ] Query
     - [ ] Keys
     - [ ] Mouse
@@ -145,7 +145,7 @@ Hopefully this library will remain generic enough to be able to be used with mos
     - [ ] Menu 
     - [ ] Repaint
     - [ ] Theme Change
-    - [ ] Drag Drop Files
+    - [ ] Drag Drop
   - [ ] Query
     - [ ] Keys
     - [ ] Mouse
@@ -188,7 +188,7 @@ Hopefully this library will remain generic enough to be able to be used with mos
     - [ ] Menu 
     - [ ] Repaint
     - [ ] Theme Change
-    - [ ] Drag Drop Files
+    - [ ] Drag Drop
   - [ ] Query
     - [ ] Keys
     - [ ] Mouse
